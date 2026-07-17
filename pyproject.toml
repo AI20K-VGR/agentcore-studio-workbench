@@ -1,0 +1,16 @@
+[project]
+name = "agentcore-studio-workbench"
+version = "0.1.0"
+description = "AgentCore Studio — Workbench UI wiring, recipe validator/graph-lint, Tenant-Wall. Owner: SWE."
+requires-python = ">=3.14"
+dependencies = [
+    "agentcore-studio-contracts",
+    "psycopg[binary,pool]>=3.2",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/studio_workbench"]
