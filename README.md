@@ -2,10 +2,10 @@
 
 > Workbench UI wiring, recipe validator / graph-lint, Tenant-Wall.
 
-**Owner:** SWE · **Loại:** uv workspace member (Python 3.14) · **Repo cha:** [agentcore-studio-kit](https://github.com/hieubui2409/agentcore-studio-kit)
+**Owner:** SWE — Thiệu Quang Minh · **Loại:** uv workspace member (Python 3.14) · **Repo cha:** [agentcore-studio-kit](https://github.com/hieubui2409/agentcore-studio-kit)
 
 ## Repo này là gì
-Submodule `packages/workbench` của workspace `agentcore-studio-kit`. Owner: **SWE**. Chứa wiring cho Workbench, recipe validator / graph-lint, Tenant-Wall.
+Submodule `packages/workbench` của workspace `agentcore-studio-kit`. Owner: **SWE — Thiệu Quang Minh**. Chứa wiring cho Workbench, recipe validator / graph-lint, Tenant-Wall.
 
 ## ⚠️ Không build/test độc lập được
 `agentcore-studio-workbench` phụ thuộc `agentcore-studio-contracts` + uv.lock + `docker/postgres-init` của repo cha, và cần **Postgres** cho test. Vì vậy:
