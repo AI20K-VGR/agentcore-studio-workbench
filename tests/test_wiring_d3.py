@@ -40,7 +40,7 @@ async def test_wiring_d3_recipe_to_interpreter() -> None:
     result = await run(
         recipe,
         kb_search=EmptyKbSearch(),
-        llm=FixtureLLM("simple_callisto_query"),
+        llm=FixtureLLM("smoke-01"),
         embedding=EmptyEmbedding(),
         trace_writer=None,
     )
