@@ -33,9 +33,16 @@ def test_create_recipe_d3_structure() -> None:
 
 @pytest.mark.asyncio
 async def test_wiring_d3_recipe_to_interpreter() -> None:
-    """Test Day 3 wiring: passing Recipe to interpreter.run() touches the engine entry point."""
-    recipe = create_sample_recipe_d3()
-    with pytest.raises(NotImplementedError) as exc_info:
-        await run(recipe, trace_writer=None)
+    """Test Day 3 wiring: passing Recipe to interpreter.run()."""
+    from studio_engine.demo_stubs import EmptyEmbedding, EmptyKbSearch, FixtureLLM
 
-    assert "spec AIE-1: interpreter run() body" in str(exc_info.value)
+    recipe = create_sample_recipe_d3()
+    result = await run(
+        recipe,
+        kb_search=EmptyKbSearch(),
+        llm=FixtureLLM("simple_callisto_query"),
+        embedding=EmptyEmbedding(),
+        trace_writer=None,
+    )
+    assert result.run_id is not None
+    assert len(result.final_state) > 0

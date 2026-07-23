@@ -36,15 +36,24 @@ def test_create_recipe_d4_contains_kb_binding() -> None:
     assert recipe.kb_binding is not None
     assert recipe.kb_binding.kb_id == "kb-callisto-v1"
     assert recipe.kb_binding.scope == "ankor/public"
+    # Check that node n1 has tenant and section_roles populated in params
+    n1 = recipe.dag.nodes[0]
+    assert n1.params.get("tenant") == "ankor"
+    assert n1.params.get("section_roles") == ["public"]
 
 
 @pytest.mark.asyncio
 async def test_wiring_recipe_to_interpreter_entry() -> None:
-    """Test wiring: passing Recipe with kb_binding into interpreter.run() touches the entry point."""
+    """Test wiring: passing Recipe with kb_binding into interpreter.run()."""
+    from studio_engine.demo_stubs import EmptyEmbedding, EmptyKbSearch, FixtureLLM
+
     recipe = create_recipe_d4()
-
-    # Verify that the Recipe with kb_binding reaches the engine entry point (raising AIE-1 stub exception)
-    with pytest.raises(NotImplementedError) as exc_info:
-        await run(recipe, trace_writer=None)
-
-    assert "spec AIE-1: interpreter run() body" in str(exc_info.value)
+    result = await run(
+        recipe,
+        kb_search=EmptyKbSearch(),
+        llm=FixtureLLM("simple_callisto_query"),
+        embedding=EmptyEmbedding(),
+        trace_writer=None,
+    )
+    assert result.run_id is not None
+    assert "n1" in result.final_state

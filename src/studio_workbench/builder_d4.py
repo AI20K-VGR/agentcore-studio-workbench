@@ -46,8 +46,25 @@ def create_recipe_d4(
         scope=scope,
     )
 
+    # Extract tenant and section_roles from scope ("ankor/public")
+    if "/" in scope:
+        tenant_from_scope, roles_part = scope.split("/", 1)
+        section_roles = [r.strip() for r in roles_part.split(",") if r.strip()]
+    else:
+        tenant_from_scope = tenant
+        section_roles = [scope] if scope else ["public"]
+
     nodes = [
-        Node(id="n1", type=NodeType.KB_RETRIEVE, params={"query": "Callisto security policy"}),
+        Node(
+            id="n1",
+            type=NodeType.KB_RETRIEVE,
+            params={
+                "query": "Callisto security policy",
+                "tenant": tenant_from_scope,
+                "section_roles": section_roles,
+                "top_k": 3,
+            },
+        ),
         Node(id="n2", type=NodeType.LLM_STEP, params={"temperature": 0.0}),
         Node(id="n3", type=NodeType.TOOL_CALL, params={"tool": "kb_search"}),
         Node(id="n4", type=NodeType.END, params={}),
