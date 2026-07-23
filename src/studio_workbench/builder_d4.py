@@ -59,7 +59,7 @@ def create_recipe_d4(
             id="n1",
             type=NodeType.KB_RETRIEVE,
             params={
-                "query": "Callisto security policy",
+                "query": "Nhân viên xin nghỉ phép cần báo trước bao lâu?",
                 "tenant": tenant_from_scope,
                 "section_roles": section_roles,
                 "top_k": 3,
@@ -82,6 +82,6 @@ def create_recipe_d4(
         agent_config=config,
         dag=Dag(nodes=nodes, edges=edges),
         kb_binding=kb_bind,
-        golden_set_ref="golden-set-d4-callisto",
+        golden_set_ref="callisto-smoke-5-v0",
         scorecard_threshold=ScorecardThreshold(success=0.9, citation_accuracy=0.95),
     )
