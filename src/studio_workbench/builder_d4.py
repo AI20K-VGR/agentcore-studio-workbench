@@ -26,6 +26,7 @@ def create_recipe_d4(
     kb_id: str = "kb-callisto-v1",
     scope: str = "ankor/public",
     tool_whitelist: list[str] | None = None,
+    query: str = "Nhân viên xin nghỉ phép cần báo trước bao lâu?",
 ) -> Recipe:
     """Build a Day 4 Recipe instance containing `kb_binding.{kb_id, scope}`.
 
@@ -59,7 +60,7 @@ def create_recipe_d4(
             id="n1",
             type=NodeType.KB_RETRIEVE,
             params={
-                "query": "Nhân viên xin nghỉ phép cần báo trước bao lâu?",
+                "query": query,
                 "tenant": tenant_from_scope,
                 "section_roles": section_roles,
                 "top_k": 3,
