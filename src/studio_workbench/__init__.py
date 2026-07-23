@@ -7,15 +7,21 @@ import (mirrors `studio_contracts`'s own `__init__.py` pattern); `resolve_tenant
 stays reachable only via its own `studio_workbench.tenant_wall` submodule.
 """
 
-from studio_workbench.builder import build_agent_config, create_sample_recipe_d3
+from studio_workbench.builder import (
+    build_agent_config,
+    create_recipe_d3,
+    create_recipe_d4,
+    create_sample_recipe_d3,
+)
 from studio_workbench.publish import publish, rollback
 from studio_workbench.validator import graph_lint
 
 __all__ = [
     "build_agent_config",
+    "create_recipe_d3",
+    "create_recipe_d4",
     "create_sample_recipe_d3",
     "graph_lint",
     "publish",
     "rollback",
 ]
-
