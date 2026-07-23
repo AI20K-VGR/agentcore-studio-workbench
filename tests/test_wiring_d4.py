@@ -5,9 +5,13 @@ Owner: SWE (Thiệu Quang Minh — Issue #18).
 
 from __future__ import annotations
 
+from uuid import UUID
+
 import pytest
 from studio_engine.interpreter import run
 from studio_workbench import build_agent_config, create_recipe_d4
+
+ANKOR_ID = UUID("a0000000-0000-0000-0000-000000000001")
 
 
 def test_build_agent_config_from_form_inputs() -> None:
@@ -32,7 +36,7 @@ def test_create_recipe_d4_contains_kb_binding() -> None:
     )
 
     assert recipe.agent_id == "agent-callisto-01"
-    assert recipe.tenant == "ankor"
+    assert recipe.tenant_id == ANKOR_ID
     assert recipe.kb_binding is not None
     assert recipe.kb_binding.kb_id == "kb-callisto-v1"
     assert recipe.kb_binding.scope == "ankor/public"

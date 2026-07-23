@@ -20,15 +20,19 @@ they get partway done — punishing incremental progress is the wrong incentive 
 
 from __future__ import annotations
 
+from uuid import UUID
+
 import pytest
 from studio_contracts import AgentConfig, Dag, Edge, KbBinding, Node, NodeType, Recipe, ScorecardThreshold
 from studio_workbench.validator import graph_lint
+
+ANKOR_ID = UUID("a0000000-0000-0000-0000-000000000001")
 
 
 def _valid_recipe() -> Recipe:
     return Recipe(
         agent_id="agent-1",
-        tenant="ankor",
+        tenant_id=ANKOR_ID,
         agent_config=AgentConfig(
             instructions="Answer from KB only.",
             model="gpt-4o-mini",

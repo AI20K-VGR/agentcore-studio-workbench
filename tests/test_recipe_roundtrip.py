@@ -6,6 +6,8 @@ growing a parallel/divergent recipe type that drifts from the P2 contract.
 
 from __future__ import annotations
 
+from uuid import UUID
+
 from studio_contracts import (
     AgentConfig,
     Dag,
@@ -17,11 +19,13 @@ from studio_contracts import (
     ScorecardThreshold,
 )
 
+ANKOR_ID = UUID("a0000000-0000-0000-0000-000000000001")
+
 
 def _sample_recipe() -> Recipe:
     return Recipe(
         agent_id="agent-1",
-        tenant="ankor",
+        tenant_id=ANKOR_ID,
         agent_config=AgentConfig(
             instructions="Answer from KB only.",
             model="gpt-4o-mini",

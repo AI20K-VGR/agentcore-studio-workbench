@@ -7,6 +7,8 @@ và khởi tạo bản Recipe thử nghiệm 3-node (kb-retrieve -> llm-step -> 
 
 from __future__ import annotations
 
+from uuid import UUID
+
 from studio_contracts import (
     AgentConfig,
     Dag,
@@ -17,6 +19,8 @@ from studio_contracts import (
     Recipe,
     ScorecardThreshold,
 )
+
+ANKOR_ID = UUID("a0000000-0000-0000-0000-000000000001")
 
 
 def build_agent_config(
@@ -55,7 +59,7 @@ def create_sample_recipe_d3() -> Recipe:
 
     return Recipe(
         agent_id="agent_demo_d3",
-        tenant="ankor",
+        tenant_id=ANKOR_ID,
         agent_config=config,
         dag=Dag(nodes=nodes, edges=edges),
         kb_binding=KbBinding(kb_id="kb_callisto", scope="public"),
