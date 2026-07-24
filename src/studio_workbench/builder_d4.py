@@ -68,6 +68,7 @@ def create_recipe_d4(
             type=NodeType.KB_RETRIEVE,
             params={
                 "query": query,
+                "tenant_id": str(t_id),
                 "tenant": tenant_from_scope,
                 "section_roles": section_roles,
                 "top_k": 3,
