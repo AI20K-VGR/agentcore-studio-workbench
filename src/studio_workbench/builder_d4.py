@@ -25,7 +25,7 @@ ANKOR_ID = UUID("a0000000-0000-0000-0000-000000000001")
 def create_recipe_d4(
     agent_id: str = "agent-callisto-d4",
     tenant: str = "ankor",
-    tenant_id: UUID | str = ANKOR_ID,
+    tenant_id: UUID = ANKOR_ID,
     instructions: str = "Tra cứu quy trình và bảo mật Callisto.",
     model: str = "gemini-2.5-flash",
     kb_id: str = "kb-callisto-v1",
@@ -69,6 +69,7 @@ def create_recipe_d4(
             params={
                 "query": query,
                 "tenant": tenant_from_scope,
+                "tenant_id": t_id,
                 "section_roles": section_roles,
                 "top_k": 3,
             },

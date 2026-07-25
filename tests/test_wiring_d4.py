@@ -8,6 +8,7 @@ from __future__ import annotations
 from uuid import UUID
 
 import pytest
+from studio_contracts import TraceEvent
 from studio_engine.interpreter import run
 from studio_workbench import build_agent_config, create_recipe_d4
 
@@ -46,6 +47,13 @@ def test_create_recipe_d4_contains_kb_binding() -> None:
     assert n1.params.get("section_roles") == ["public"]
 
 
+class _NoOpTraceWriter:
+    """Conforming no-op TraceWriter seam for wiring tests."""
+
+    async def write(self, event: TraceEvent) -> None:
+        del event
+
+
 @pytest.mark.asyncio
 async def test_wiring_recipe_to_interpreter_entry() -> None:
     """Test wiring: passing Recipe with kb_binding into interpreter.run()."""
@@ -57,7 +65,7 @@ async def test_wiring_recipe_to_interpreter_entry() -> None:
         kb_search=EmptyKbSearch(),
         llm=FixtureLLM("smoke-01"),
         embedding=EmptyEmbedding(),
-        trace_writer=None,
+        trace_writer=_NoOpTraceWriter(),
     )
     assert result.run_id is not None
     assert "n1" in result.final_state
