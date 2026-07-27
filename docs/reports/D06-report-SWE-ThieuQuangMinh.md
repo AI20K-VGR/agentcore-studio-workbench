@@ -7,6 +7,8 @@
 - **Dự án:** AgentCore Studio - `agentcore-studio-workbench` / `agentcore-studio-engine`
 - **Ngày:** Thứ Hai, 27/07/2026
 - **Nhiệm vụ:** Recipe từ form feed vào interpreter entry đầy đủ (`agent_config` + `kb_binding`); gỡ hardcode case tay
+- **Pull Request:** https://github.com/AI20K-VGR/agentcore-studio-workbench/pull/4
+- **Branch:** `feature/day6-recipe-builder-d6`
 
 ---
 
@@ -33,12 +35,14 @@ Trong Ngày 6, vị trí SWE tập trung xây dựng module khởi tạo `Recipe
 
 ---
 
-## ✅ 2. KẾT QUẢ ĐẠT ĐƯỢC (DoD CHECKLIST)
+## ✅ 2. KẾT QUẢ ĐẠT ĐƯỢC & BẰNG CHỨNG (DoD CHECKLIST & EVIDENCE)
 
-- [x] **Recipe Builder Động (`builder_d6.py`)**: Hoàn thành `create_recipe_d6` loại bỏ 100% tham số mặc định hardcoded.
+- [x] **Pull Request #4**: https://github.com/AI20K-VGR/agentcore-studio-workbench/pull/4
+- [x] **Branch Feature**: https://github.com/AI20K-VGR/agentcore-studio-workbench/tree/feature/day6-recipe-builder-d6
+- [x] **Recipe Builder Động (`builder_d6.py`)**: Hoàn thành `create_recipe_d6` loại bỏ 100% tham số mặc định hardcoded ([`src/studio_workbench/builder_d6.py`](file:///c:/Users/Admin/OneDrive/M%C3%A1y%20t%C3%ADnh/Minh/agentcore-studio-workbench/src/studio_workbench/builder_d6.py)).
 - [x] **Scope & Multi-Role Parsing**: Xử lý phân tách linh hoạt các role từ chuỗi `scope`.
-- [x] **Test Suite Ngày 6 (`test_wiring_d6.py`)**: Bổ sung đầy đủ unit tests và integration tests, 100% PASSED.
-- [x] **Báo cáo Tiến độ & Daily Note**: Hoàn thiện báo cáo `D06-report-SWE-ThieuQuangMinh.md` và `2026-07-27-Dozyboy.md` trong repo `agentcore-report`.
+- [x] **Test Suite Ngày 6 (`test_wiring_d6.py`)**: Bổ sung đầy đủ unit tests và integration tests ([`tests/test_wiring_d6.py`](file:///c:/Users/Admin/OneDrive/M%C3%A1y%20t%C3%ADnh/Minh/agentcore-studio-workbench/tests/test_wiring_d6.py)), 100% PASSED.
+- [x] **Báo cáo Tiến độ & Daily Note**: Hoàn thiện `D06-report-SWE-ThieuQuangMinh.md` và `2026-07-27-Dozyboy.md` trong repo `agentcore-report`.
 - [x] **Đồng bộ Branch & Push PR**: Push thành công lên nhánh `feature/day6-recipe-builder-d6` của repo `agentcore-studio-workbench`.
 
 ---
