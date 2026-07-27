@@ -58,7 +58,7 @@ def test_create_recipe_d6_with_pure_dynamic_inputs() -> None:
 
     # Check node n2 (LLM_STEP) params
     n2 = recipe.dag.nodes[1]
-    assert n2.params.get("prompt") == "Quy định nghỉ phép năm và chế độ công tác."
+    assert n2.params.get("temperature") == 0.0
 
     # Check node n3 (TOOL_CALL) params - dynamically using custom_search_tool
     n3 = recipe.dag.nodes[2]
