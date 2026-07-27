@@ -35,7 +35,6 @@ def test_create_recipe_d3_structure() -> None:
     assert len(recipe.dag.nodes) == 4
     assert len(recipe.dag.edges) == 3
 
-
 class _NoOpTraceWriter:
     """Conforming no-op TraceWriter seam for wiring tests."""
 

@@ -31,7 +31,6 @@ def test_create_recipe_d4_contains_kb_binding() -> None:
     """Test that create_recipe_d4 builds a Recipe with valid kb_binding.{kb_id, scope}."""
     recipe = create_recipe_d4(
         agent_id="agent-callisto-01",
-        tenant="ankor",
         kb_id="kb-callisto-v1",
         scope="ankor/public",
     )
@@ -41,9 +40,9 @@ def test_create_recipe_d4_contains_kb_binding() -> None:
     assert recipe.kb_binding is not None
     assert recipe.kb_binding.kb_id == "kb-callisto-v1"
     assert recipe.kb_binding.scope == "ankor/public"
-    # Check that node n1 has tenant and section_roles populated in params
+    # Check that node n1 has tenant_id and section_roles populated in params
     n1 = recipe.dag.nodes[0]
-    assert n1.params.get("tenant") == "ankor"
+    assert n1.params.get("tenant_id") == ANKOR_ID
     assert n1.params.get("section_roles") == ["public"]
 
 
