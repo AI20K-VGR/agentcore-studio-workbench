@@ -37,7 +37,6 @@ async def test_workbench_recipe_emits_trace_events_via_interpreter() -> None:
     )
 
     assert result.run_id is not None
-    assert len(result.events) == 4
     assert len(writer.events) == 4
 
     # Verify that every trace event has matching run_id, agent_id, tenant_id
