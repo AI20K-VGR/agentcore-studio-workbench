@@ -11,6 +11,7 @@ from studio_workbench.builder import (
     build_agent_config,
     create_recipe_d3,
     create_recipe_d4,
+    create_recipe_d6,
     create_sample_recipe_d3,
 )
 from studio_workbench.publish import publish, rollback
@@ -20,6 +21,7 @@ __all__ = [
     "build_agent_config",
     "create_recipe_d3",
     "create_recipe_d4",
+    "create_recipe_d6",
     "create_sample_recipe_d3",
     "graph_lint",
     "publish",

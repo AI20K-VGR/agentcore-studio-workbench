@@ -1,7 +1,7 @@
-"""Recipe Builder Day 4 for Workbench (SWE owner — Thiệu Quang Minh).
+"""Recipe Builder Day 6 for Workbench (SWE owner — Thiệu Quang Minh).
 
-Converts user form inputs from Workbench UI into a validated `Recipe` (R-SPEC A1#1)
-containing `kb_binding.{kb_id, scope}` for multi-tenant KB scope declaration (Issue #18).
+Builds a validated `Recipe` (R-SPEC A1#1) completely driven by dynamic user form inputs
+from Workbench UI without hardcoded default values.
 """
 
 from __future__ import annotations
@@ -19,27 +19,26 @@ from studio_contracts import (
 )
 from studio_workbench.builder_d3 import build_agent_config
 
-ANKOR_ID = UUID("a0000000-0000-0000-0000-000000000001")
 
-
-def create_recipe_d4(
-    agent_id: str = "agent-callisto-d4",
-    tenant_id: UUID = ANKOR_ID,
-    instructions: str = "Tra cứu quy trình và bảo mật Callisto.",
-    model: str = "gemini-2.5-flash",
-    tool_whitelist: list[str] | None = None,
-    kb_id: str = "kb-callisto-v1",
-    scope: str = "ankor/public",
-    query: str = "Nhân viên xin nghỉ phép cần báo trước bao lâu?",
+def create_recipe_d6(
+    agent_id: str,
+    tenant_id: UUID,
+    instructions: str,
+    model: str,
+    tool_whitelist: list[str],
+    kb_id: str,
+    scope: str,
+    query: str,
+    golden_set_ref: str = "callisto-smoke-5-v0",
+    success_threshold: float = 0.9,
+    citation_accuracy_threshold: float = 0.95,
 ) -> Recipe:
-    """Build a Day 4 Recipe instance containing `kb_binding.{kb_id, scope}`.
+    """Build a Day 6 dynamic Recipe instance driven 100% by user inputs.
 
-    Wiring `recipe -> interpreter` relies on `recipe.kb_binding` to pass
-    the declared KB scope to `kb.search`.
+    All core parameters (`agent_id`, `tenant_id`, `instructions`, `model`,
+    `tool_whitelist`, `kb_id`, `scope`, `query`) are required positional/keyword
+    arguments with NO hardcoded default values.
     """
-    if tool_whitelist is None:
-        tool_whitelist = ["kb_search"]
-
     t_id = tenant_id if isinstance(tenant_id, UUID) else UUID(tenant_id)
 
     config = build_agent_config(
@@ -53,7 +52,7 @@ def create_recipe_d4(
         scope=scope,
     )
 
-    # Extract tenant and section_roles from scope ("ankor/public")
+    # Extract section_roles from scope (e.g. "ankor/public" -> section_roles=["public"])
     if "/" in scope:
         tenant_from_scope, roles_part = scope.split("/", 1)
         section_roles = [r.strip() for r in roles_part.split(",") if r.strip()]
@@ -88,6 +87,9 @@ def create_recipe_d4(
         agent_config=config,
         dag=Dag(nodes=nodes, edges=edges),
         kb_binding=kb_bind,
-        golden_set_ref="callisto-smoke-5-v0",
-        scorecard_threshold=ScorecardThreshold(success=0.9, citation_accuracy=0.95),
+        golden_set_ref=golden_set_ref,
+        scorecard_threshold=ScorecardThreshold(
+            success=success_threshold,
+            citation_accuracy=citation_accuracy_threshold,
+        ),
     )
