@@ -70,7 +70,7 @@ def create_recipe_d6(
                 "top_k": 3,
             },
         ),
-        Node(id="n2", type=NodeType.LLM_STEP, params={"prompt": instructions, "temperature": 0.0}),
+        Node(id="n2", type=NodeType.LLM_STEP, params={"temperature": 0.0}),
         Node(id="n3", type=NodeType.TOOL_CALL, params={"tool": tool_whitelist[0] if tool_whitelist else "kb_search"}),
         Node(id="n4", type=NodeType.END, params={}),
     ]
