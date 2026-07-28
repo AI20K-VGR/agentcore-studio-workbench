@@ -57,8 +57,8 @@ def test_create_dynamic_recipe_2_nodes() -> None:
     assert len(recipe.dag.nodes) == 2
     assert len(recipe.dag.edges) == 1
     assert recipe.dag.nodes[0].type == NodeType.LLM_STEP
-    assert recipe.dag.nodes[1].type == NodeType.END
-    assert recipe.kb_binding is None
+    assert recipe.kb_binding is not None
+    assert recipe.kb_binding.kb_id == "kb-callisto-v1"
 
 
 def test_create_dynamic_recipe_3_nodes_with_kb() -> None:

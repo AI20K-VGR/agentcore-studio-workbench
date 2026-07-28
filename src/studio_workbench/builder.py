@@ -60,7 +60,9 @@ def create_dynamic_recipe(
         tool_whitelist=tool_whitelist,
     )
 
-    kb_bind = KbBinding(kb_id=kb_id, scope=scope) if (kb_id and scope) else None
+    kb_id_val = kb_id if kb_id is not None else "kb-callisto-v1"
+    scope_val = scope if scope is not None else "ankor/public"
+    kb_bind = KbBinding(kb_id=kb_id_val, scope=scope_val)
 
     return Recipe(
         agent_id=agent_id,
