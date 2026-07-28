@@ -32,4 +32,6 @@ def resolve_tenant(session: object) -> str:
     P7 stub: SWE OJT fills in the real resolution (session/JWT claim -> tenant). Deliberately
     unimplemented.
     """
-    raise NotImplementedError("resolve_tenant: SWE OJT fills in server-side session->tenant resolution (R-SPEC A3)")
+    raise NotImplementedError(
+        "resolve_tenant: SWE OJT fills in server-side session->tenant resolution (R-SPEC A3)"
+    )

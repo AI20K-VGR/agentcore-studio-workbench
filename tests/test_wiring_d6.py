@@ -45,7 +45,9 @@ def test_create_recipe_d6_with_pure_dynamic_inputs() -> None:
 
     assert recipe.agent_id == "custom-agent-99"
     assert recipe.tenant_id == BOREA_ID
-    assert recipe.agent_config.instructions == "Quy định nghỉ phép năm và chế độ công tác."
+    assert (
+        recipe.agent_config.instructions == "Quy định nghỉ phép năm và chế độ công tác."
+    )
     assert recipe.agent_config.model == "gpt-4o-mini"
     assert recipe.agent_config.tool_whitelist == ["custom_search_tool"]
     assert recipe.kb_binding.kb_id == "kb-hr-policy-v2"

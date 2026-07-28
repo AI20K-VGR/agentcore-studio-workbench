@@ -87,7 +87,9 @@ def create_sample_recipe_d3() -> Recipe:
     )
 
     nodes = [
-        Node(id="node_1", type=NodeType.KB_RETRIEVE, params={"query": "Callisto policy"}),
+        Node(
+            id="node_1", type=NodeType.KB_RETRIEVE, params={"query": "Callisto policy"}
+        ),
         Node(id="node_2", type=NodeType.LLM_STEP, params={"temperature": 0.0}),
         Node(id="node_3", type=NodeType.TOOL_CALL, params={"tool": "kb_search"}),
         Node(id="node_4", type=NodeType.END, params={}),
@@ -163,7 +165,11 @@ def create_recipe_d4(
             },
         ),
         Node(id="n2", type=NodeType.LLM_STEP, params={"temperature": 0.0}),
-        Node(id="n3", type=NodeType.TOOL_CALL, params={"tool": tool_whitelist[0] if tool_whitelist else "kb_search"}),
+        Node(
+            id="n3",
+            type=NodeType.TOOL_CALL,
+            params={"tool": tool_whitelist[0] if tool_whitelist else "kb_search"},
+        ),
         Node(id="n4", type=NodeType.END, params={}),
     ]
 
@@ -235,7 +241,11 @@ def create_recipe_d6(
             },
         ),
         Node(id="n2", type=NodeType.LLM_STEP, params={"temperature": 0.0}),
-        Node(id="n3", type=NodeType.TOOL_CALL, params={"tool": tool_whitelist[0] if tool_whitelist else "kb_search"}),
+        Node(
+            id="n3",
+            type=NodeType.TOOL_CALL,
+            params={"tool": tool_whitelist[0] if tool_whitelist else "kb_search"},
+        ),
         Node(id="n4", type=NodeType.END, params={}),
     ]
 

@@ -39,7 +39,9 @@ def publish(recipe: Recipe, scorecard: Scorecard) -> None:
     P7 stub: SWE OJT fills in the real body (graph_lint -> verdict check -> write
     wb.recipes/recipe_versions -> flip endpoint). Deliberately unimplemented.
     """
-    raise NotImplementedError("publish: SWE OJT fills in the graph_lint + verdict-gated publish flow (R-SPEC A4)")
+    raise NotImplementedError(
+        "publish: SWE OJT fills in the graph_lint + verdict-gated publish flow (R-SPEC A4)"
+    )
 
 
 def rollback(agent_id: str, tenant: str, *, to_version: int) -> None:
@@ -48,4 +50,6 @@ def rollback(agent_id: str, tenant: str, *, to_version: int) -> None:
 
     P7 stub: SWE OJT fills in the real body. Deliberately unimplemented.
     """
-    raise NotImplementedError("rollback: SWE OJT fills in the recipe_versions rollback body (R-SPEC A4)")
+    raise NotImplementedError(
+        "rollback: SWE OJT fills in the recipe_versions rollback body (R-SPEC A4)"
+    )

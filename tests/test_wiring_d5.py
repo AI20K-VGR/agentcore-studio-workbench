@@ -50,4 +50,4 @@ async def test_workbench_recipe_emits_trace_events_via_interpreter() -> None:
 
     # Verify node execution sequence in trace events: n1 -> n2 -> n3 -> n4
     node_ids = [e.node_id for e in writer.events]
-    assert node_ids == ["n1", "n2", "n3", "n4"]
+    assert node_ids == ["n1", "n2", "n3", "n4"]
