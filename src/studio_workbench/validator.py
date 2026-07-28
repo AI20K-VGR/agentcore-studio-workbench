@@ -38,4 +38,6 @@ def graph_lint(recipe: Recipe) -> None:
     P7 stub: SWE OJT fills in the real 4-rule body. Deliberately unimplemented so
     `test_graph_lint.py` stays red-by-design until then.
     """
-    raise NotImplementedError("graph_lint: SWE OJT fills in the 4-rule DAG validator (R-SPEC A1#1)")
+    raise NotImplementedError(
+        "graph_lint: SWE OJT fills in the 4-rule DAG validator (R-SPEC A1#1)"
+    )

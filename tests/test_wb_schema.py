@@ -10,6 +10,7 @@ here proves the CREATE ... IF NOT EXISTS body tolerates re-entry with no error.
 from __future__ import annotations
 
 from studio_app.core._db import Pool
+
 from studio_workbench.schema import ddl
 
 
