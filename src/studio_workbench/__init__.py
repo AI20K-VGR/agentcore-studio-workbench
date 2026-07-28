@@ -9,6 +9,7 @@ stays reachable only via its own `studio_workbench.tenant_wall` submodule.
 
 from studio_workbench.builder import (
     build_agent_config,
+    create_dynamic_recipe,
     create_recipe_d3,
     create_recipe_d4,
     create_recipe_d6,
@@ -19,6 +20,7 @@ from studio_workbench.validator import graph_lint
 
 __all__ = [
     "build_agent_config",
+    "create_dynamic_recipe",
     "create_recipe_d3",
     "create_recipe_d4",
     "create_recipe_d6",
