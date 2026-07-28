@@ -23,7 +23,17 @@ from __future__ import annotations
 from uuid import UUID
 
 import pytest
-from studio_contracts import AgentConfig, Dag, Edge, KbBinding, Node, NodeType, Recipe, ScorecardThreshold
+from studio_contracts import (
+    AgentConfig,
+    Dag,
+    Edge,
+    KbBinding,
+    Node,
+    NodeType,
+    Recipe,
+    ScorecardThreshold,
+)
+
 from studio_workbench.validator import graph_lint
 
 ANKOR_ID = UUID("a0000000-0000-0000-0000-000000000001")

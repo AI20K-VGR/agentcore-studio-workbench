@@ -9,6 +9,7 @@ import pytest
 from studio_contracts import TraceEvent
 from studio_engine.demo_stubs import EmptyEmbedding, EmptyKbSearch, FixtureLLM
 from studio_engine.interpreter import run
+
 from studio_workbench import create_recipe_d4
 
 

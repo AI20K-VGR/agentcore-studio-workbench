@@ -10,6 +10,7 @@ from uuid import UUID
 import pytest
 from studio_contracts import TraceEvent
 from studio_engine.interpreter import run
+
 from studio_workbench import build_agent_config, create_sample_recipe_d3
 
 ANKOR_ID = UUID("a0000000-0000-0000-0000-000000000001")

@@ -6,11 +6,10 @@ compatibility with interpreter.run().
 
 from __future__ import annotations
 
-from uuid import UUID
-
 import pytest
 from studio_contracts import Edge, Node, NodeType, TraceEvent
 from studio_engine.interpreter import run
+
 from studio_workbench import (
     ANKOR_ID,
     build_agent_config,

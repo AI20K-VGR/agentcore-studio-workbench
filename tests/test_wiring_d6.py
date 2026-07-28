@@ -13,6 +13,7 @@ from uuid import UUID
 import pytest
 from studio_contracts import NodeType, TraceEvent
 from studio_engine.interpreter import run
+
 from studio_workbench import create_recipe_d6
 
 ANKOR_ID = UUID("a0000000-0000-0000-0000-000000000001")
