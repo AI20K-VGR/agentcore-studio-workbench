@@ -78,10 +78,14 @@ def test_agent_config_has_all_three_fields() -> None:
 
 @pytest.mark.asyncio
 async def test_protocol_cleanliness_gateway_embedding_without_interpreter_changes() -> None:
-    """DoD 1 & DoD 2: Replace StubEmbedding -> GatewayEmbedding seamlessly in interpreter.run().
+    """DoD 1 & DoD 2: Constructor Dependency Injection (DIP) & Protocol Compatibility.
     
-    Proves Clean Architecture (DIP) where interpreter logic accepts any EmbeddingService implementation,
-    executing offline in CI and conforming strictly to studio_contracts.EmbeddingService.
+    Verifies that `interpreter.run()` accepts any valid `EmbeddingService` implementation
+    (such as `MockGatewayEmbedding`) via constructor-DI without requiring any changes to `interpreter.py`.
+    
+    Note: In the current engine DAG walk (v0), `LlmStepExecutor` receives `embedding` via DI but does
+    not invoke `.embed()` during execution (`executors.py:160`). This test validates DIP structural
+    wiring and signature compatibility at the workbench integration boundary.
     """
     from studio_engine.demo_stubs import FixtureLLM
     from studio_kb import StaticKbSearch
@@ -100,7 +104,7 @@ async def test_protocol_cleanliness_gateway_embedding_without_interpreter_change
     mock_gateway_embedding = MockGatewayEmbedding(dimension=768)
     trace_writer = _RecordingTraceWriter()
 
-    # Pass MockGatewayEmbedding seamlessly into interpreter.run()
+    # 1. Verify interpreter.run() accepts MockGatewayEmbedding via DI seamlessly
     result = await run(
         recipe,
         kb_search=StaticKbSearch(),
@@ -119,10 +123,23 @@ async def test_protocol_cleanliness_gateway_embedding_without_interpreter_change
     assert len(trace_writer.events) == 4
     assert isinstance(result.final_state["n1"], list)
 
-    # Verify MockGatewayEmbedding complies with EmbeddingService protocol contract
+    # 2. Independent assertion: verify MockGatewayEmbedding structural compliance with EmbeddingService protocol
     assert isinstance(mock_gateway_embedding, EmbeddingService)
-    vector_output = await mock_gateway_embedding.embed(["test query"])
-    assert len(vector_output) == 1
-    assert len(vector_output[0]) == 768
-    assert mock_gateway_embedding.calls == [["test query"]]
+
+
+@pytest.mark.asyncio
+async def test_mock_gateway_embedding_standalone_protocol_behavior() -> None:
+    """Standalone unit test for MockGatewayEmbedding behavior.
+    
+    Verifies that MockGatewayEmbedding's `embed()` method returns deterministic vectors matching
+    the configured dimension and correctly records invocation calls independently of interpreter.run().
+    """
+    mock_emb = MockGatewayEmbedding(dimension=768)
+    vectors = await mock_emb.embed(["query text 1", "query text 2"])
+    
+    assert len(vectors) == 2
+    assert len(vectors[0]) == 768
+    assert len(vectors[1]) == 768
+    assert mock_emb.calls == [["query text 1", "query text 2"]]
+
 
