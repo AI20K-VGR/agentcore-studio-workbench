@@ -16,6 +16,7 @@ build-backend = "hatchling.build"
 packages = ["src/studio_workbench"]
 
 [tool.ruff]
+line-length = 120
 src = ["src"]
 lint.select = ["E", "F", "W", "I", "UP", "B", "SIM"]
 
