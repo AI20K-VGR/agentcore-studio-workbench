@@ -144,7 +144,7 @@ def create_recipe_d4(
 
     # Extract tenant and section_roles from scope ("ankor/public")
     if "/" in scope:
-        tenant_from_scope, roles_part = scope.split("/", 1)
+        _, roles_part = scope.split("/", 1)
         section_roles = [r.strip() for r in roles_part.split(",") if r.strip()]
     else:
         section_roles = [scope] if scope else ["public"]
@@ -216,7 +216,7 @@ def create_recipe_d6(
 
     # Extract section_roles from scope (e.g. "ankor/public" -> section_roles=["public"])
     if "/" in scope:
-        tenant_from_scope, roles_part = scope.split("/", 1)
+        _, roles_part = scope.split("/", 1)
         section_roles = [r.strip() for r in roles_part.split(",") if r.strip()]
     else:
         section_roles = [scope] if scope else ["public"]
