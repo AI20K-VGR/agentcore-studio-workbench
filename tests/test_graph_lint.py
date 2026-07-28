@@ -87,8 +87,8 @@ def test_lint_rejects_bad_graph() -> None:
         update={
             "dag": Dag.model_construct(
                 nodes=[
-                    Node.model_construct(id="n1", type="not-a-real-type", params={})
-                ],  # type: ignore[arg-type]  # intentional: simulate a stale/foreign node type the closed enum would reject
+                    Node.model_construct(id="n1", type="not-a-real-type", params={})  # type: ignore[arg-type]  # intentional: simulate a stale/foreign node type the closed enum would reject
+                ],
                 edges=[],
             )
         }
