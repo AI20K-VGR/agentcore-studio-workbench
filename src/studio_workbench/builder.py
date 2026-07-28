@@ -60,9 +60,12 @@ def create_dynamic_recipe(
         tool_whitelist=tool_whitelist,
     )
 
-    kb_id_val = kb_id if kb_id is not None else "kb-callisto-v1"
-    scope_val = scope if scope is not None else "ankor/public"
-    kb_bind = KbBinding(kb_id=kb_id_val, scope=scope_val)
+    if not kb_id or not scope:
+        raise ValueError(
+            "Cần truyền đầy đủ 'kb_id' và 'scope' (không rỗng) để tạo Recipe."
+        )
+
+    kb_bind = KbBinding(kb_id=kb_id, scope=scope)
 
     return Recipe(
         agent_id=agent_id,

@@ -48,6 +48,8 @@ def test_create_dynamic_recipe_2_nodes() -> None:
         instructions="Direct LLM chat without KB",
         model="gemini-2.5-flash",
         tool_whitelist=[],
+        kb_id="kb-callisto-v1",
+        scope="ankor/public",
         nodes=nodes,
         edges=edges,
     )
@@ -57,8 +59,45 @@ def test_create_dynamic_recipe_2_nodes() -> None:
     assert len(recipe.dag.nodes) == 2
     assert len(recipe.dag.edges) == 1
     assert recipe.dag.nodes[0].type == NodeType.LLM_STEP
+    assert recipe.dag.nodes[1].type == NodeType.END
     assert recipe.kb_binding is not None
     assert recipe.kb_binding.kb_id == "kb-callisto-v1"
+    assert recipe.kb_binding.scope == "ankor/public"
+
+
+def test_create_dynamic_recipe_missing_kb_or_scope_raises() -> None:
+    """Test that missing or empty kb_id or scope raises ValueError."""
+    nodes = [
+        Node(id="n1", type=NodeType.LLM_STEP, params={}),
+        Node(id="n2", type=NodeType.END, params={}),
+    ]
+    edges = [Edge(from_="n1", to="n2")]
+
+    with pytest.raises(ValueError, match="Cần truyền đầy đủ 'kb_id' và 'scope'"):
+        create_dynamic_recipe(
+            agent_id="agent-err",
+            tenant_id=ANKOR_ID,
+            instructions="inst",
+            model="gemini-2.5-flash",
+            tool_whitelist=[],
+            nodes=nodes,
+            edges=edges,
+            kb_id=None,
+            scope=None,
+        )
+
+    with pytest.raises(ValueError, match="Cần truyền đầy đủ 'kb_id' và 'scope'"):
+        create_dynamic_recipe(
+            agent_id="agent-err",
+            tenant_id=ANKOR_ID,
+            instructions="inst",
+            model="gemini-2.5-flash",
+            tool_whitelist=[],
+            nodes=nodes,
+            edges=edges,
+            kb_id="",
+            scope="",
+        )
 
 
 def test_create_dynamic_recipe_3_nodes_with_kb() -> None:
@@ -143,6 +182,8 @@ async def test_dynamic_recipe_wiring_to_interpreter() -> None:
         instructions="Direct answer",
         model="gemini-2.5-flash",
         tool_whitelist=[],
+        kb_id="kb-callisto-v1",
+        scope="ankor/public",
         nodes=nodes,
         edges=edges,
     )
