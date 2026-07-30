@@ -12,9 +12,19 @@ Validates:
 3. Form-level builders reject missing required inputs too (TypeError / ValueError) -
    these must be *real* errors, not silently-swallowed defaults.
 4. INV-1 (tenant_wall) hardening: additional fail-closed edge cases not covered by
-   test_wiring_d8.py, plus an integration test proving that a client-declared
-   ("form data") tenant_id is ignored in favor of the server-resolved session tenant
-   when building a Recipe (T1 IDOR prevention end-to-end: builder + tenant_wall).
+   test_wiring_d8.py, plus a builder-side test proving create_recipe_d6() has no side
+   channel for tenant_id to arrive through besides its one explicit keyword.
+
+   NOTE (post-review, PR#9 review): a prior version of this file's Group 3 also carried
+   an "end-to-end INV-1" test that asserted resolve_session() then substituted the
+   result into the form dict itself before calling create_recipe_d6() - the substitution
+   was the test's own code, not anything in src/, so it passed even against a builder
+   mutated to hardcode its tenant. There is no src/ caller wiring resolve_session() into
+   create_recipe_d6() (workbench and studio_engine are import-linter sibling layers, so
+   workbench cannot be the composition root); the real INV-1 decision point is
+   interpreter.run() at the composition root, covered by
+   agentcore-studio-app#2::test_inv1_recipe_khai_tenant_khac_thi_session_thang. This file
+   only owns the builder half now: proving create_recipe_d6() itself has no back door.
 
 Owner: SWE (Thieu Quang Minh). Day 9 - Sprint 1 Chang 1 Tuan 2.
 """
@@ -265,34 +275,35 @@ def test_resolve_session_filters_blank_entries_out_of_roles_list() -> None:
     assert ctx.roles == ["hr", "finance"]
 
 
-def test_recipe_built_from_form_ignores_client_declared_tenant_and_uses_session() -> None:
-    """Harden INV-1 end-to-end (builder + tenant_wall): even when the Form Feed
-    payload itself carries a tenant_id (a client-declared / attacker-controlled
-    value, T1 IDOR style), the Recipe that actually gets built must be keyed off
-    the server-resolved session tenant - never the client's claim.
+def test_create_recipe_d6_rejects_unexpected_tenant_like_keys() -> None:
+    """Harden (builder-side): create_recipe_d6() has no side channel for a tenant to
+    arrive through besides its one explicit `tenant_id` keyword.
 
-    This closes the gap flagged during Day 9 review: create_recipe_d6() takes
-    tenant_id as a plain parameter and has no wiring to tenant_wall by itself, so
-    callers (the API boundary) MUST resolve the session first and substitute that
-    tenant_id in before calling the builder. This test locks in that contract.
+    Replaces a prior test that claimed to lock INV-1 end-to-end but didn't: it built an
+    "attacker" form dict, then substituted the session-resolved tenant into that same
+    dict *inside the test body* before calling create_recipe_d6(), and asserted the
+    substitution it had just performed. The substitution was the fence, and it lived in
+    the test, not in src/ - a create_recipe_d6() mutated to hardcode its tenant (ignoring
+    the tenant_id argument entirely) still passed that test. See PR#9 review for the
+    mutation that demonstrated this.
+
+    What this test locks instead: create_recipe_d6() takes named parameters with no
+    **kwargs catch-all (builder.py:196), so any extra tenant-shaped key in a form
+    payload - "tenant", "tenant_slug", or anything else not spelled `tenant_id` - MUST
+    blow up as TypeError, not get silently accepted or silently preferred over the real
+    `tenant_id`. That's a real, exercisable property of this function.
+
+    What this test does NOT claim: that the *caller* correctly resolves the session
+    before calling this builder (that's an API-boundary responsibility, not the
+    builder's) - resolve_session()/resolve_tenant() correctness is covered by the rest
+    of this file's Group 3 and by test_wiring_d8.py. The actual INV-1 decision point
+    (recipe-declared tenant vs. session-resolved tenant) lives at the composition root,
+    interpreter.run(), covered by
+    agentcore-studio-app#2::test_inv1_recipe_khai_tenant_khac_thi_session_thang.
     """
-    attacker_form_data = _valid_form_data()
-    attacker_form_data["tenant_id"] = OTHER_ID  # client tu khai tenant khac (IDOR attempt)
+    form_data = _valid_form_data()
+    form_data["tenant"] = OTHER_ID  # not a real param - must not be silently accepted
+    form_data["tenant_slug"] = "borea"  # ditto
 
-    server_session = {
-        "tenant_id": ANKOR_ID,
-        "user": "dozyboy@ankor.vn",
-        "roles": ["hr"],
-    }
-
-    # INV-1 seam: the tenant actually used comes ONLY from the session, never
-    # from whatever the client wrote into the form/body.
-    resolved_tenant_id = resolve_session(server_session).tenant_id
-    assert resolved_tenant_id == ANKOR_ID
-    assert resolved_tenant_id != attacker_form_data["tenant_id"]
-
-    safe_form_data = {**attacker_form_data, "tenant_id": resolved_tenant_id}
-    recipe = create_recipe_d6(**safe_form_data)  # type: ignore[arg-type]
-
-    assert recipe.tenant_id == ANKOR_ID
-    assert recipe.tenant_id != OTHER_ID
+    with pytest.raises(TypeError, match="unexpected keyword argument"):
+        create_recipe_d6(**form_data)  # type: ignore[arg-type]
