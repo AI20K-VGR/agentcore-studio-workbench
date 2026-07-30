@@ -10,7 +10,7 @@ Owner: SWE (Thiệu Quang Minh).
 
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 from uuid import UUID
 
 import pytest
@@ -25,7 +25,7 @@ ANKOR_ID = UUID("a0000000-0000-0000-0000-000000000001")
 
 class MockGatewayEmbedding:
     """Offline Fake/Mock GatewayEmbedding implementation adhering to studio_contracts.EmbeddingService protocol.
-    
+
     Contract invariant: must implement `async def embed(self, texts: list[str]) -> list[list[float]]`.
     Ensures CI runs 100% offline without hitting real external network endpoints.
     """
@@ -80,10 +80,10 @@ def test_agent_config_has_all_three_fields() -> None:
 @pytest.mark.asyncio
 async def test_protocol_cleanliness_gateway_embedding_without_interpreter_changes() -> None:
     """DoD 1 & DoD 2: Constructor Dependency Injection (DIP) & Protocol Compatibility.
-    
+
     Verifies that `interpreter.run()` accepts any valid `EmbeddingService` implementation
     (such as `MockGatewayEmbedding`) via constructor-DI without requiring any changes to `interpreter.py`.
-    
+
     Note: In the current engine DAG walk (v0), `LlmStepExecutor` receives `embedding` via DI but does
     not invoke `.embed()` during execution (`executors.py:160`). This test validates DIP structural
     wiring and signature compatibility at the workbench integration boundary.
@@ -132,13 +132,13 @@ async def test_protocol_cleanliness_gateway_embedding_without_interpreter_change
 @pytest.mark.asyncio
 async def test_mock_gateway_embedding_standalone_protocol_behavior() -> None:
     """Standalone unit test for MockGatewayEmbedding behavior.
-    
+
     Verifies that MockGatewayEmbedding's `embed()` method returns deterministic vectors matching
     the configured dimension and correctly records invocation calls independently of interpreter.run().
     """
     mock_emb = MockGatewayEmbedding(dimension=768)
     vectors = await mock_emb.embed(["query text 1", "query text 2"])
-    
+
     assert len(vectors) == 2
     assert len(vectors[0]) == 768
     assert len(vectors[1]) == 768

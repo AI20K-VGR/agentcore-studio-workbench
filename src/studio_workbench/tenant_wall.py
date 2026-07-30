@@ -32,9 +32,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from uuid import UUID
 from typing import Any
-
+from uuid import UUID
 
 # ---------------------------------------------------------------------------
 # Public data class — resolved context carrier
@@ -104,7 +103,7 @@ def resolve_tenant(session: object) -> UUID:
     tenant_id: Any = _MISSING
     for key in ("tenant_id", "tenant"):
         try:
-            val = session[key]  # type: ignore[index]
+            val = session[key]
             tenant_id = val
             break
         except (KeyError, TypeError):
