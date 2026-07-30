@@ -18,6 +18,7 @@ from studio_contracts import EmbeddingService, TraceEvent
 from studio_engine.interpreter import run
 
 from studio_workbench import create_recipe_d6
+from studio_workbench.tenant_wall import ResolvedContext
 
 ANKOR_ID = UUID("a0000000-0000-0000-0000-000000000001")
 
@@ -111,6 +112,7 @@ async def test_protocol_cleanliness_gateway_embedding_without_interpreter_change
         llm=FixtureLLM("smoke-01"),
         embedding=mock_gateway_embedding,
         trace_writer=trace_writer,
+        session_context=ResolvedContext(tenant_id=ANKOR_ID, user="test-harness", roles=["public"]),
     )
 
     assert result.run_id is not None

@@ -12,6 +12,7 @@ from studio_contracts import TraceEvent
 from studio_engine.interpreter import run
 
 from studio_workbench import build_agent_config, create_recipe_d4
+from studio_workbench.tenant_wall import ResolvedContext
 
 ANKOR_ID = UUID("a0000000-0000-0000-0000-000000000001")
 
@@ -66,6 +67,7 @@ async def test_wiring_recipe_to_interpreter_entry() -> None:
         llm=FixtureLLM("smoke-01"),
         embedding=EmptyEmbedding(),
         trace_writer=_NoOpTraceWriter(),
+        session_context=ResolvedContext(tenant_id=ANKOR_ID, user="test-harness", roles=["public"]),
     )
     assert result.run_id is not None
     assert "n1" in result.final_state
