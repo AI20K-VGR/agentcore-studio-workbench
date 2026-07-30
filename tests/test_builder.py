@@ -18,6 +18,7 @@ from studio_workbench import (
     create_recipe_d4,
     create_recipe_d6,
 )
+from studio_workbench.tenant_wall import ResolvedContext
 
 
 def test_build_agent_config() -> None:
@@ -194,6 +195,7 @@ async def test_dynamic_recipe_wiring_to_interpreter() -> None:
         llm=FixtureLLM("smoke-01"),
         embedding=EmptyEmbedding(),
         trace_writer=_NoOpTraceWriter(),
+        session_context=ResolvedContext(tenant_id=ANKOR_ID, user="test-harness", roles=["public"]),
     )
 
     assert result.run_id is not None
