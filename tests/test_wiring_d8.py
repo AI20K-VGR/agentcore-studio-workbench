@@ -115,10 +115,10 @@ def test_resolve_tenant_raises_on_blank_tenant_id() -> None:
 def test_resolve_tenant_non_mapping_session_raises_type_error() -> None:
     """DoD 7: non-mapping session raises TypeError, not PermissionError."""
     with pytest.raises(TypeError, match="dict-like mapping"):
-        resolve_tenant("not-a-mapping")  # type: ignore[arg-type]
+        resolve_tenant("not-a-mapping")
 
     with pytest.raises(TypeError):
-        resolve_tenant(12345)  # type: ignore[arg-type]
+        resolve_tenant(12345)
 
 
 # ===========================================================================
@@ -229,7 +229,7 @@ def test_resolved_context_is_frozen() -> None:
     ctx = resolve_session(VALID_SESSION)
 
     with pytest.raises((AttributeError, TypeError)):
-        ctx.tenant_id = "hacked-tenant"  # type: ignore[misc]
+        ctx.tenant_id = "hacked-tenant"  # type: ignore[misc, assignment]
 
     with pytest.raises((AttributeError, TypeError)):
         ctx.user = "hacked-user"  # type: ignore[misc]
