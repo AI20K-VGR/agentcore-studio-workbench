@@ -178,9 +178,14 @@ async def test_wiring_d6_with_kb_search_execution() -> None:
     kb_output = result.final_state["n1"]
     assert isinstance(kb_output, list)
 
-    # Verify grounding when StaticKbSearch yields chunks
-    if len(kb_output) > 0:
-        assert kb_output[0].chunk_id == "ankor-leave-001#c1"
-        llm_output = result.final_state["n2"]
-        assert isinstance(llm_output, dict)
-        assert "answer" in llm_output
+    # Unconditional — this query/tenant/role combo deterministically yields a chunk from
+    # StaticKbSearch (token-overlap scoring, tie-broken by chunk_id per static_search.py:99-101).
+    # The prior `if len(kb_output) > 0:` guard (added `7106fc5`) silently no-op'd this assertion
+    # whenever KB returned `[]`, so the test could not tell "KB wired correctly" from "KB wiring
+    # broken and returning nothing" — điểm gãy #4, `daily-notes/2026-07-27-DongAnh2704.md:200`.
+    # `e2e_smoke_eval.py` hits this same case as SC-01 and always grounds it.
+    assert len(kb_output) > 0, f"kb_output was empty: {kb_output!r}"
+    assert kb_output[0].chunk_id == "ankor-leave-001#c1"
+    llm_output = result.final_state["n2"]
+    assert isinstance(llm_output, dict)
+    assert "answer" in llm_output
