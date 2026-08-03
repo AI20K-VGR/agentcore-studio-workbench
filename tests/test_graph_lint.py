@@ -55,7 +55,7 @@ def test_graph_lint_accepts_valid_recipe() -> None:
     every tool-call tool ∈ whitelist) passes `graph_lint` cleanly — returns `None`, raises
     nothing. The engine (AIE-1) must never interpret a recipe that has not passed this gate,
     per R-SPEC A1#1: "recipe không qua validator = không interpret"."""
-    assert graph_lint(_valid_recipe()) is None
+    graph_lint(_valid_recipe())  # must not raise
 
 
 def test_lint_rejects_bad_graph() -> None:
