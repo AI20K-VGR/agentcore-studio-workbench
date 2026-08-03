@@ -18,8 +18,11 @@ implementation slot).
 Only after both checks pass does `publish()` write the new version into `wb.recipes` +
 `wb.recipe_versions` (this phase's DDL, `schema.py`) and flip the named endpoint to serve it.
 
-`rollback(agent_id, tenant, to_version=...)` restores the named endpoint to a prior
+`rollback(agent_id, tenant_id, to_version=...)` restores the named endpoint to a prior
 `wb.recipe_versions` row — the version history `schema.py`'s DDL exists to make possible.
+`tenant_id` is `UUID` (D-13), matching both `schema.py`'s `wb.recipes.tenant_id` column and
+`studio_contracts.recipe.Recipe.tenant_id` — this signature was `tenant: str` (pre-D-13 slug),
+fixed D11 alongside the `schema.py` column type.
 
 This module ships as a spec stub this phase: both functions unconditionally raise
 `NotImplementedError`. The SWE OJT candidate fills in the real bodies later; this module only
@@ -27,6 +30,8 @@ specifies the wiring contract (which seam calls which, in what order, on what ve
 """
 
 from __future__ import annotations
+
+from uuid import UUID
 
 from studio_contracts import Recipe, Scorecard
 
@@ -42,8 +47,8 @@ def publish(recipe: Recipe, scorecard: Scorecard) -> None:
     raise NotImplementedError("publish: SWE OJT fills in the graph_lint + verdict-gated publish flow (R-SPEC A4)")
 
 
-def rollback(agent_id: str, tenant: str, *, to_version: int) -> None:
-    """Roll the named endpoint for `(agent_id, tenant)` back to `to_version`, read from
+def rollback(agent_id: str, tenant_id: UUID, *, to_version: int) -> None:
+    """Roll the named endpoint for `(agent_id, tenant_id)` back to `to_version`, read from
     `wb.recipe_versions` history.
 
     P7 stub: SWE OJT fills in the real body. Deliberately unimplemented.
