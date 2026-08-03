@@ -85,9 +85,14 @@ def graph_lint(recipe: Recipe) -> None:
                 _walk(neighbor)
         color[node_id] = BLACK
 
-    for node_id in node_ids:
-        if color[node_id] == WHITE:
-            _walk(node_id)
+    # Iterate `dag.nodes` (list, declaration order), never `node_ids` (set): set iteration
+    # order depends on PYTHONHASHSEED, which is randomized per-process by default, so which
+    # node the walk starts from — and therefore which node a cycle gets reported against —
+    # would otherwise vary run to run for the same input (found by AIE-2, 4 different names
+    # across 12 seeds on the same cyclic DAG).
+    for node in dag.nodes:
+        if color[node.id] == WHITE:
+            _walk(node.id)
 
     # Rule 4 — every `tool-call` node's tool must be in agent_config.tool_whitelist.
     whitelist = set(recipe.agent_config.tool_whitelist)
