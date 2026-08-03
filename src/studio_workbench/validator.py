@@ -48,8 +48,7 @@ def graph_lint(recipe: Recipe) -> None:
             NodeType(node.type)
         except ValueError as exc:
             raise ValueError(
-                f"graph_lint: node {node.id!r} has type {node.type!r}, "
-                "not one of the 6 closed NodeType values"
+                f"graph_lint: node {node.id!r} has type {node.type!r}, not one of the 6 closed NodeType values"
             ) from exc
 
     # Rule 3 — every edge must resolve to a real node id on both ends. Checked before the
@@ -81,9 +80,7 @@ def graph_lint(recipe: Recipe) -> None:
         color[node_id] = GRAY
         for neighbor in adjacency[node_id]:
             if color[neighbor] == GRAY:
-                raise ValueError(
-                    f"graph_lint: recipe.dag has a forbidden cycle involving node {neighbor!r}"
-                )
+                raise ValueError(f"graph_lint: recipe.dag has a forbidden cycle involving node {neighbor!r}")
             if color[neighbor] == WHITE:
                 _walk(neighbor)
         color[node_id] = BLACK

@@ -39,6 +39,7 @@ from uuid import UUID
 # Public data class — resolved context carrier
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True, slots=True)
 class ResolvedContext:
     """Immutable carrier for the resolved server-side identity.
@@ -66,6 +67,7 @@ _MISSING: Any = object()
 # ---------------------------------------------------------------------------
 # Core resolution logic
 # ---------------------------------------------------------------------------
+
 
 def resolve_tenant(session: object) -> UUID:
     """Resolve the tenant_id for `session`, server-side.
@@ -95,9 +97,7 @@ def resolve_tenant(session: object) -> UUID:
         TypeError: If `session` is not a Mapping.
     """
     if not isinstance(session, Mapping):
-        raise TypeError(
-            f"resolve_tenant: session must be a dict-like mapping, got {type(session).__name__!r}"
-        )
+        raise TypeError(f"resolve_tenant: session must be a dict-like mapping, got {type(session).__name__!r}")
 
     # Support both canonical key and alias
     tenant_id: Any = _MISSING
@@ -106,7 +106,7 @@ def resolve_tenant(session: object) -> UUID:
             val = session[key]
             tenant_id = val
             break
-        except (KeyError, TypeError):
+        except KeyError, TypeError:
             continue
 
     # fail-closed: missing or None
@@ -124,8 +124,7 @@ def resolve_tenant(session: object) -> UUID:
     tenant_str = str(tenant_id).strip()
     if not tenant_str:
         raise PermissionError(
-            "resolve_tenant: tenant_id is blank/empty — "
-            "request rejected (INV-1 mandatory NOT NULL filter)"
+            "resolve_tenant: tenant_id is blank/empty — request rejected (INV-1 mandatory NOT NULL filter)"
         )
 
     # fail-closed: invalid UUID format
@@ -172,21 +171,15 @@ def resolve_session(session: object) -> ResolvedContext:
             val = session[key]  # type: ignore[index]
             user = val
             break
-        except (KeyError, TypeError):
+        except KeyError, TypeError:
             continue
 
     if user is _MISSING or user is None:
-        raise PermissionError(
-            "resolve_session: user is absent from session — "
-            "request rejected (INV-1 fail-closed)"
-        )
+        raise PermissionError("resolve_session: user is absent from session — request rejected (INV-1 fail-closed)")
 
     user_str = str(user).strip()
     if not user_str:
-        raise PermissionError(
-            "resolve_session: user is blank/empty — "
-            "request rejected (INV-1 mandatory filter)"
-        )
+        raise PermissionError("resolve_session: user is blank/empty — request rejected (INV-1 mandatory filter)")
 
     # Resolve roles — least-privilege default (empty list is safe)
     roles: list[str] = []
@@ -199,7 +192,7 @@ def resolve_session(session: object) -> ResolvedContext:
                 # OAuth2 scope string: "read write admin" → ["read", "write", "admin"]
                 roles = [r.strip() for r in raw.split() if r.strip()]
             break
-        except (KeyError, TypeError):
+        except KeyError, TypeError:
             continue
 
     return ResolvedContext(tenant_id=tenant_id, user=user_str, roles=roles)
@@ -210,4 +203,3 @@ __all__ = [
     "resolve_session",
     "resolve_tenant",
 ]
-

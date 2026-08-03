@@ -61,9 +61,7 @@ def create_dynamic_recipe(
     )
 
     if not kb_id or not scope:
-        raise ValueError(
-            "Cần truyền đầy đủ 'kb_id' và 'scope' (không rỗng) để tạo Recipe."
-        )
+        raise ValueError("Cần truyền đầy đủ 'kb_id' và 'scope' (không rỗng) để tạo Recipe.")
 
     kb_bind = KbBinding(kb_id=kb_id, scope=scope)
 
@@ -90,9 +88,7 @@ def create_sample_recipe_d3() -> Recipe:
     )
 
     nodes = [
-        Node(
-            id="node_1", type=NodeType.KB_RETRIEVE, params={"query": "Callisto policy"}
-        ),
+        Node(id="node_1", type=NodeType.KB_RETRIEVE, params={"query": "Callisto policy"}),
         Node(id="node_2", type=NodeType.LLM_STEP, params={"temperature": 0.0}),
         Node(id="node_3", type=NodeType.TOOL_CALL, params={"tool": "kb_search"}),
         Node(id="node_4", type=NodeType.END, params={}),

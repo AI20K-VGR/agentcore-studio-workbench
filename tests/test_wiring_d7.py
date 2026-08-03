@@ -143,5 +143,3 @@ async def test_mock_gateway_embedding_standalone_protocol_behavior() -> None:
     assert len(vectors[0]) == 768
     assert len(vectors[1]) == 768
     assert mock_emb.calls == [["query text 1", "query text 2"]]
-
-

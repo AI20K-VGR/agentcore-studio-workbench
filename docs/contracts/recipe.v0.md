@@ -27,12 +27,12 @@ updated: 2026-08-03
 ```python
 class Recipe(BaseModel):
     agent_id: str
-    tenant_id: UUID                 # D-13 — immutable tenant id, không phải slug
-    agent_config: AgentConfig       # {instructions, model, tool_whitelist}
-    dag: Dag                        # {nodes: [Node{id,type∈6,params}], edges: [Edge{from,to,when?}]}
-    kb_binding: KbBinding           # {kb_id, scope}
+    tenant_id: UUID  # D-13 — immutable tenant id, không phải slug
+    agent_config: AgentConfig  # {instructions, model, tool_whitelist}
+    dag: Dag  # {nodes: [Node{id,type∈6,params}], edges: [Edge{from,to,when?}]}
+    kb_binding: KbBinding  # {kb_id, scope}
     golden_set_ref: str
-    scorecard_threshold: ScorecardThreshold   # {success, citation_accuracy}
+    scorecard_threshold: ScorecardThreshold  # {success, citation_accuracy}
 ```
 
 Không có gì để "nâng" — bản v0 và bản freeze §3.1 đã là cùng 1 chữ ký từ khi `tenant_id: UUID` được
