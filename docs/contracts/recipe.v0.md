@@ -1,24 +1,25 @@
 ---
 id: studio.contract.recipe.v0
 type: interface-draft
-status: freeze-ready
-freeze: FREEZE-READY   # chờ Q-1 (nơi freeze) + 4/4 chữ ký — workshop #84, D11
+status: frozen
+freeze: FROZEN   # lật 2026-08-04 — workbench#12 (3/4, tác giả SWE tự ký) + #13 (3/4) merged vào main
 freeze_target: D11
 contract_ref: umbrella-contract §3.1
 pen: SWE — Thiệu Quang Minh
 date: 2026-08-03
-updated: 2026-08-03
+updated: 2026-08-04
 ---
 
-# 🖊️ recipe — INTERFACE (FREEZE-READY D11)
+# 🖊️ recipe — INTERFACE (FROZEN D11)
 
-> ## 🧊 FREEZE-READY (03/08, D11) — hình dạng đã khớp `contracts` từ trước; freeze = khoá GRAPH-LINT.
+> ## 🧊 FROZEN (04/08, D11) — hình dạng + graph-lint đã khoá. Đổi = mini-RFC + 4/4 chữ ký + decision-log.
 > Chữ ký `Recipe` (`agent_id · tenant_id: UUID · agent_config · dag · kb_binding · golden_set_ref ·
-> scorecard_threshold`) đã khớp `studio_contracts.recipe.Recipe` từ D-13 — không đổi field/kiểu nào
-> hôm nay. Việc D11 là khoá **graph-lint** (4 luật DAG-validator, bút SWE đồng thời) — trước đây là
-> spec-stub, nay đã có thân hàm thật.
-> **Hai cổng còn chờ người:** **Q-1** (nơi bản `FROZEN` đổ vào — xem issue kit#84) + **4/4 chữ ký**.
-> Đổi sau freeze = mini-RFC + 4/4 chữ ký + decision-log.
+> scorecard_threshold`) khớp `studio_contracts.recipe.Recipe` từ D-13. Graph-lint 4 luật đã có thân hàm
+> thật, merged [workbench#12](https://github.com/AI20K-VGR/agentcore-studio-workbench/pull/12)
+> (3/4 Approve: DE, AIE-1, AIE-2 — SWE tự ký với tư cách tác giả, theo ADR-D11-01) + fix schema
+> `tenant → tenant_id UUID`, merged [workbench#13](https://github.com/AI20K-VGR/agentcore-studio-workbench/pull/13)
+> (Approve: AIE-1, AIE-2). Q-1 (nơi lật cờ) đóng theo tinh thần mentor uỷ quyền team tự quyết (kit#84,
+> 03/08) — lật tại đúng file draft, không cần PR bump ở `contracts` vì `Recipe` shape không đổi.
 
 ---
 
