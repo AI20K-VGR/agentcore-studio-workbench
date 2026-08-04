@@ -5,10 +5,15 @@ string stub) — `ensure_all_schemas()` (Phase 3, `studio_app.core.schema`) dire
 module and calls `ddl()`; this file is edited ONLY here, never `apps/studio` (antichain,
 plan.md "Dependency matrix & file-ownership").
 
-`wb.recipes` — one row per (agent_id, tenant, version): the recipe (R-SPEC A1#1) as stored JSONB
+`wb.recipes` — one row per (agent_id, tenant_id, version): the recipe (R-SPEC A1#1) as stored JSONB
 (the wire shape workbench validates through `studio_contracts.Recipe`, never a workbench-local
 type) + a `status` lifecycle column (`draft`/`published`/`rolled_back`, spec-only for now — the
 concrete state machine lands with `publish.py`'s real implementation).
+
+D11 fix: `tenant` was `TEXT` (pre-D-13 slug), now `tenant_id UUID` to match
+`studio_contracts.recipe.Recipe.tenant_id` — the contract this table stores rows FOR already
+made this switch; the DDL had drifted behind it since no code writes here yet (`publish()` is
+still a stub).
 
 `wb.recipe_versions` — append-only history: every version of a recipe that was ever published,
 so `publish.rollback()` (spec stub this phase) has something to roll back TO. `recipe_id`
@@ -28,19 +33,19 @@ CREATE SCHEMA IF NOT EXISTS wb;
 CREATE TABLE IF NOT EXISTS wb.recipes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     agent_id TEXT NOT NULL,
-    tenant TEXT NOT NULL,
+    tenant_id UUID NOT NULL,
     recipe JSONB NOT NULL,
     version INT NOT NULL DEFAULT 1,
     status TEXT NOT NULL DEFAULT 'draft',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE (agent_id, tenant, version)
+    UNIQUE (agent_id, tenant_id, version)
 );
 
 CREATE TABLE IF NOT EXISTS wb.recipe_versions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     recipe_id UUID NOT NULL REFERENCES wb.recipes (id) ON DELETE CASCADE,
     agent_id TEXT NOT NULL,
-    tenant TEXT NOT NULL,
+    tenant_id UUID NOT NULL,
     recipe JSONB NOT NULL,
     version INT NOT NULL,
     status TEXT NOT NULL,
