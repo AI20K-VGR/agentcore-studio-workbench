@@ -106,7 +106,7 @@ def resolve_tenant(session: object) -> UUID:
             val = session[key]
             tenant_id = val
             break
-        except KeyError, TypeError:
+        except (KeyError, TypeError):
             continue
 
     # fail-closed: missing or None
@@ -171,7 +171,7 @@ def resolve_session(session: object) -> ResolvedContext:
             val = session[key]  # type: ignore[index]
             user = val
             break
-        except KeyError, TypeError:
+        except (KeyError, TypeError):
             continue
 
     if user is _MISSING or user is None:
@@ -192,7 +192,7 @@ def resolve_session(session: object) -> ResolvedContext:
                 # OAuth2 scope string: "read write admin" → ["read", "write", "admin"]
                 roles = [r.strip() for r in raw.split() if r.strip()]
             break
-        except KeyError, TypeError:
+        except (KeyError, TypeError):
             continue
 
     return ResolvedContext(tenant_id=tenant_id, user=user_str, roles=roles)
