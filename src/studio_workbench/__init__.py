@@ -16,6 +16,7 @@ from studio_workbench.builder import (
     create_recipe_d6,
     create_sample_recipe_d3,
 )
+from studio_workbench.canvas import recipe_from_canvas
 from studio_workbench.publish import publish, rollback
 from studio_workbench.validator import graph_lint
 
@@ -29,5 +30,6 @@ __all__ = [
     "create_sample_recipe_d3",
     "graph_lint",
     "publish",
+    "recipe_from_canvas",
     "rollback",
 ]
