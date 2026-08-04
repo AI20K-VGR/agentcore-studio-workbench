@@ -1,22 +1,10 @@
-"""graph-lint spec tests (R-SPEC A1#1 :36) — `validator.graph_lint` ships as a spec stub this
-phase: it unconditionally raises `NotImplementedError` (spec SWE, real 4-rule body left for the
-OJT candidate).
+"""graph-lint spec tests (R-SPEC A1#1 :36) — `validator.graph_lint` real 4-rule body (D11).
 
-- `test_graph_lint_not_implemented` pins the CURRENT stub behavior (raises `NotImplementedError`)
-  as a **plain** assertion (no `xfail`). Post-gate review (D10, `kit#50`) flagged the previous
-  `xfail(strict=False)` wrapper here: the current stub and a hypothetical fake stub that never
-  gets implemented both reported identically as harmless `XPASS` forever, the same defect class
-  caught and fixed in `evalhub`'s `test_harness_judge_compute_not_implemented` on D9. A plain
-  assertion means the day the real 4-rule body lands and starts raising `ValueError` instead,
-  this test goes red on its own — forcing whoever lands that change to see it and delete/update
-  it, instead of it silently reporting green forever under a marker nobody re-reads.
-- `test_lint_rejects_bad_graph` pins the FUTURE real behavior (rule-specific rejection) and stays
-  under `xfail(strict=False)`: it genuinely fails today (`NotImplementedError`, not the
-  rule-specific `ValueError`) and is meant to flip green (or get promoted off `xfail`) the day
-  `graph_lint()` is implemented for real. `strict=False` matters here specifically because an OJT
-  candidate implementing rule 1 first would otherwise turn this into an XPASS-that-fails-the-suite
-  the moment they get partway done — punishing incremental progress is the wrong incentive for
-  this phase.
+- `test_graph_lint_accepts_valid_recipe` replaces the old `test_graph_lint_not_implemented`
+  (which pinned the stub's unconditional `NotImplementedError`): now that the real body is
+  implemented, a structurally valid recipe must pass cleanly (return `None`), not raise.
+- `test_lint_rejects_bad_graph` pins the 4 rule-specific rejections and is promoted off
+  `xfail` — it now passes for real against the implemented body.
 """
 
 from __future__ import annotations
@@ -62,16 +50,14 @@ def _valid_recipe() -> Recipe:
     )
 
 
-def test_graph_lint_not_implemented() -> None:
-    """KHÓA: `graph_lint`'s current spec body is `NotImplementedError` (P7 stub — SWE OJT fills
-    in the real 4-rule DAG validator later; the engine (P6) must never interpret a recipe that
-    has not passed this gate, per R-SPEC A1#1: "recipe không qua validator = không interpret").
-    Plain assertion, not `xfail` — see module docstring (post-gate fix, `kit#50`)."""
-    with pytest.raises(NotImplementedError):
-        graph_lint(_valid_recipe())
+def test_graph_lint_accepts_valid_recipe() -> None:
+    """KHÓA: a structurally valid recipe (6-closed node types, no cycle, every edge resolves,
+    every tool-call tool ∈ whitelist) passes `graph_lint` cleanly — returns `None`, raises
+    nothing. The engine (AIE-1) must never interpret a recipe that has not passed this gate,
+    per R-SPEC A1#1: "recipe không qua validator = không interpret"."""
+    graph_lint(_valid_recipe())  # must not raise
 
 
-@pytest.mark.xfail(reason="spec SWE fills graph-lint", strict=False)
 def test_lint_rejects_bad_graph() -> None:
     """KHÓA: the 4 graph-lint rules (R-SPEC A1#1 :36) — node ∈ 6 closed NodeType, no forbidden
     cycle, every edge has a resolvable destination, every `tool-call` tool ∈
