@@ -78,3 +78,8 @@ từ D-spec) neo theo `pytest.raises(ValueError, match=...)` — đổi sang tr�
 - Canvas kéo-thả (React Flow) chưa triển khai — hiện Workbench build recipe qua `builder.py`
   (form-driven), đúng Nấc 2 của `DESCOPE.md`. `graph_lint` không phụ thuộc UI nào — validator hoạt
   động y hệt dù input tới từ canvas hay form.
+
+  > ⏭️ **Cập nhật 04/08 (D12, [kit#87](https://github.com/AI20K-VGR/agentcore-studio-kit/issues/87)):**
+  > canvas React Flow 6-node **đã triển khai** (`apps/web`), recipe nay sinh từ canvas và đi qua khe
+  > `recipe_from_canvas()` → `graph_lint()`. Xem [`swe-day12.md`](swe-day12.md).
+  > Gạch đầu dòng trên đúng tại thời điểm 03/08 — giữ nguyên làm bản ghi, không viết đè.

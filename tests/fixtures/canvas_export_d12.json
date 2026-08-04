@@ -1,0 +1,68 @@
+{
+  "agent_id": "agent-callisto-d12",
+  "tenant_id": "a0000000-0000-0000-0000-000000000001",
+  "agent_config": {
+    "instructions": "Hãy tra cứu tài liệu Callisto và trả lời thắc mắc của người dùng.",
+    "model": "gemini-2.5-flash",
+    "tool_whitelist": [
+      "kb_search"
+    ]
+  },
+  "dag": {
+    "nodes": [
+      {
+        "id": "n1",
+        "type": "kb-retrieve",
+        "params": {
+          "query": "Nhân viên xin nghỉ phép cần báo trước bao lâu?",
+          "top_k": 3
+        }
+      },
+      {
+        "id": "n2",
+        "type": "llm-step",
+        "params": {
+          "temperature": 0
+        }
+      },
+      {
+        "id": "n3",
+        "type": "tool-call",
+        "params": {
+          "tool": "kb_search"
+        }
+      },
+      {
+        "id": "n4",
+        "type": "end",
+        "params": {}
+      }
+    ],
+    "edges": [
+      {
+        "from": "n1",
+        "to": "n2",
+        "when": null
+      },
+      {
+        "from": "n2",
+        "to": "n3",
+        "when": null
+      },
+      {
+        "from": "n3",
+        "to": "n4",
+        "when": null
+      }
+    ]
+  },
+  "kb_binding": {
+    "kb_id": "kb-callisto-v1",
+    "scope": "ankor/public"
+  },
+  "golden_set_ref": "callisto-smoke-5-v0",
+  "scorecard_threshold": {
+    "success": 0.9,
+    "citation_accuracy": 0.95
+  }
+}
