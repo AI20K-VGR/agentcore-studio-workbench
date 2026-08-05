@@ -15,6 +15,8 @@ from studio_contracts import NodeType, TraceEvent
 from studio_engine.interpreter import run
 
 from studio_workbench import create_recipe_d6
+from studio_workbench.builder import BOREA_ID as _BOREA_ID
+from studio_workbench.builder import _parse_kb_scope
 from studio_workbench.tenant_wall import ResolvedContext
 
 ANKOR_ID = UUID("a0000000-0000-0000-0000-000000000001")
@@ -204,3 +206,70 @@ async def test_wiring_d6_with_kb_search_execution() -> None:
     llm_output = result.final_state["n2"]
     assert isinstance(llm_output, dict)
     assert "answer" in llm_output
+
+
+# ---------------------------------------------------------------------------
+# Negative tests — [P1] Fail closed on unknown or malformed tenant scopes
+# (requested by dholmes0207 in PR #16 review)
+# ---------------------------------------------------------------------------
+
+
+def test_parse_kb_scope_rejects_typo_slug() -> None:
+    """Typo trong tenant slug ('boera' thay vì 'borea') phải bị reject ngay."""
+    with pytest.raises(ValueError, match="Tenant slug không hợp lệ"):
+        _parse_kb_scope("boera/hr", BOREA_ID)
+
+
+def test_parse_kb_scope_rejects_empty_roles() -> None:
+    """scope='ankor/' (không có role nào) phải bị reject."""
+    with pytest.raises(ValueError, match="roles trong scope rỗng"):
+        _parse_kb_scope("ankor/", ANKOR_ID)
+
+
+def test_parse_kb_scope_rejects_empty_scope() -> None:
+    """scope rỗng hoàn toàn phải bị reject."""
+    with pytest.raises(ValueError, match="scope không được rỗng"):
+        _parse_kb_scope("", ANKOR_ID)
+
+
+def test_parse_kb_scope_rejects_no_slash() -> None:
+    """scope không có '/' phải bị reject (vd: 'public' thay vì 'ankor/public')."""
+    with pytest.raises(ValueError, match="phải có dạng"):
+        _parse_kb_scope("public", ANKOR_ID)
+
+
+def test_parse_kb_scope_rejects_tenant_uuid_mismatch() -> None:
+    """slug hợp lệ nhưng UUID không khớp phải bị reject."""
+    with pytest.raises(ValueError, match="does not match"):
+        # slug 'ankor' map tới ANKOR_ID nhưng truyền vào BOREA_ID
+        _parse_kb_scope("ankor/public", BOREA_ID)
+
+
+def test_create_recipe_d6_rejects_typo_slug() -> None:
+    """create_recipe_d6 với typo slug phải raise ValueError tại build time."""
+    with pytest.raises(ValueError, match="Tenant slug không hợp lệ"):
+        create_recipe_d6(
+            agent_id="agent-bad-scope",
+            tenant_id=BOREA_ID,
+            instructions="test",
+            model="gemini-2.5-flash",
+            tool_whitelist=["kb_search"],
+            kb_id="kb-test",
+            scope="boera/hr",  # typo: 'boera' thay vì 'borea'
+            query="test query",
+        )
+
+
+def test_create_recipe_d6_rejects_empty_roles() -> None:
+    """create_recipe_d6 với empty roles phải raise ValueError tại build time."""
+    with pytest.raises(ValueError, match="roles trong scope rỗng"):
+        create_recipe_d6(
+            agent_id="agent-empty-roles",
+            tenant_id=ANKOR_ID,
+            instructions="test",
+            model="gemini-2.5-flash",
+            tool_whitelist=["kb_search"],
+            kb_id="kb-test",
+            scope="ankor/",  # empty roles
+            query="test query",
+        )
