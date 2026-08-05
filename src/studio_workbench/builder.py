@@ -19,6 +19,59 @@ from studio_contracts import (
 )
 
 ANKOR_ID = UUID("a0000000-0000-0000-0000-000000000001")
+BOREA_ID = UUID("b0000000-0000-0000-0000-000000000001")
+
+# Canonical mapping: tenant slug -> UUID.
+# Fail-closed: mọi slug không nằm trong bảng này đều bị reject ngay tại build time.
+_SCOPE_TENANT_SLUGS: dict[str, UUID] = {
+    "ankor": ANKOR_ID,
+    "borea": BOREA_ID,
+}
+
+
+def _parse_kb_scope(scope: str, tenant_id: UUID) -> list[str]:
+    """Parse và validate chuỗi scope KB, fail-closed trên mọi input sai.
+
+    Split ``kb_binding.scope`` (vd: ``"ankor/public, hr"``) thành ``section_roles``
+    và guard chống scope silent-disagree với ``tenant_id`` (kit#92, D13).
+
+    Format hợp lệ: ``"<tenant_slug>/<role1>, <role2>, ..."``
+
+    Section-role values không được validate ở đây — workbench không own KB schema.
+    Role không tồn tại sẽ bị reject bởi ``kb.search`` tại query time với lỗi rõ ràng.
+
+    Raises:
+        ValueError: Nếu scope rỗng, không có dấu ``/``, slug không hợp lệ,
+            slug map sai UUID, hoặc phần roles rỗng.
+    """
+    if not scope or not scope.strip():
+        raise ValueError(f"scope không được rỗng, nhận được: {scope!r}")
+
+    if "/" not in scope:
+        raise ValueError(f"scope phải có dạng '<tenant>/<roles>', không có '/' trong: {scope!r}")
+
+    tenant_slug, roles_part = scope.split("/", 1)
+    tenant_slug = tenant_slug.strip()
+
+    if not tenant_slug:
+        raise ValueError(f"Tenant slug rỗng trong scope: {scope!r}")
+
+    if tenant_slug not in _SCOPE_TENANT_SLUGS:
+        raise ValueError(f"Tenant slug không hợp lệ: {tenant_slug!r}. Các slug hợp lệ: {sorted(_SCOPE_TENANT_SLUGS)}")
+
+    expected_id = _SCOPE_TENANT_SLUGS[tenant_slug]
+    if expected_id != tenant_id:
+        raise ValueError(
+            f"kb_binding.scope tenant slug {tenant_slug!r} does not match tenant_id={tenant_id} "
+            f"(slug {tenant_slug!r} maps to {expected_id})"
+        )
+
+    section_roles = [r.strip() for r in roles_part.split(",") if r.strip()]
+
+    if not section_roles:
+        raise ValueError(f"Phần roles trong scope rỗng: {scope!r}. Cần ít nhất một role (vd: 'public', 'hr').")
+
+    return section_roles
 
 
 def build_agent_config(
@@ -145,12 +198,7 @@ def create_recipe_d4(
         scope=scope,
     )
 
-    # Extract tenant and section_roles from scope ("ankor/public")
-    if "/" in scope:
-        _, roles_part = scope.split("/", 1)
-        section_roles = [r.strip() for r in roles_part.split(",") if r.strip()]
-    else:
-        section_roles = [scope] if scope else ["public"]
+    section_roles = _parse_kb_scope(scope, t_id)
 
     nodes = [
         Node(
@@ -221,12 +269,7 @@ def create_recipe_d6(
         scope=scope,
     )
 
-    # Extract section_roles from scope (e.g. "ankor/public" -> section_roles=["public"])
-    if "/" in scope:
-        _, roles_part = scope.split("/", 1)
-        section_roles = [r.strip() for r in roles_part.split(",") if r.strip()]
-    else:
-        section_roles = [scope] if scope else ["public"]
+    section_roles = _parse_kb_scope(scope, t_id)
 
     nodes = [
         Node(
@@ -270,6 +313,9 @@ def create_recipe_d6(
 
 __all__ = [
     "ANKOR_ID",
+    "BOREA_ID",
+    "_SCOPE_TENANT_SLUGS",
+    "_parse_kb_scope",
     "build_agent_config",
     "create_dynamic_recipe",
     "create_recipe_d3",
