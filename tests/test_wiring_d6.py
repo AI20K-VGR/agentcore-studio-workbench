@@ -15,7 +15,6 @@ from studio_contracts import NodeType, TraceEvent
 from studio_engine.interpreter import run
 
 from studio_workbench import create_recipe_d6
-from studio_workbench.builder import BOREA_ID as _BOREA_ID
 from studio_workbench.builder import _parse_kb_scope
 from studio_workbench.tenant_wall import ResolvedContext
 
