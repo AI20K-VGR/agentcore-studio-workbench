@@ -9,6 +9,8 @@ stays reachable only via its own `studio_workbench.tenant_wall` submodule.
 
 from studio_workbench.builder import (
     ANKOR_ID,
+    BOREA_ID,
+    SECTION_VOCAB,
     build_agent_config,
     create_dynamic_recipe,
     create_recipe_d3,
@@ -22,6 +24,8 @@ from studio_workbench.validator import graph_lint
 
 __all__ = [
     "ANKOR_ID",
+    "BOREA_ID",
+    "SECTION_VOCAB",
     "build_agent_config",
     "create_dynamic_recipe",
     "create_recipe_d3",

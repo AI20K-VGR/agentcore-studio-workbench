@@ -19,6 +19,47 @@ from studio_contracts import (
 )
 
 ANKOR_ID = UUID("a0000000-0000-0000-0000-000000000001")
+BOREA_ID = UUID("b0000000-0000-0000-0000-000000000001")
+
+_SCOPE_TENANT_SLUGS: dict[str, UUID] = {"ankor": ANKOR_ID, "borea": BOREA_ID}
+
+SECTION_VOCAB = frozenset({"public", "hr", "finance", "engineering"})
+"""Duplicated from `studio_kb.doc_factory.SECTION_VOCAB` — `.importlinter` forbids
+`studio_workbench` importing `studio_kb` (sibling quadrants). Same intentional-duplication
+precedent as `ANKOR_ID` above (`doc_factory.py:39-49`); keep the two in sync by hand."""
+
+
+def _parse_kb_scope(scope: str, tenant_id: UUID) -> list[str]:
+    """Split `kb_binding.scope` (e.g. `"ankor/public, hr"`) into `section_roles`, and guard
+    against it silently disagreeing with `tenant_id`.
+
+    `create_recipe_d4`/`create_recipe_d6` take `tenant_id: UUID` and `scope: str` as two
+    independent inputs; only the tenant slug *in* `scope` ever gets checked here — the UUID
+    actually reaching `node.params["tenant_id"]` (and therefore the real `kb.search` call)
+    always comes from the `tenant_id` argument. Without this guard, a stale/copy-pasted
+    `scope` next to a correct `tenant_id` would build a Recipe whose declared scope and
+    actual query tenant disagree, with no error until `kb.search` returns 0 rows for reasons
+    that look like a KB/wiring bug (kit#92, D13).
+    """
+    if "/" in scope:
+        slug, roles_part = scope.split("/", 1)
+        expected_tenant = _SCOPE_TENANT_SLUGS.get(slug)
+        if expected_tenant is not None and expected_tenant != tenant_id:
+            raise ValueError(
+                f"kb_binding.scope tenant slug {slug!r} does not match tenant_id={tenant_id} "
+                f"(slug {slug!r} maps to {expected_tenant})"
+            )
+        section_roles = [r.strip() for r in roles_part.split(",") if r.strip()]
+    else:
+        section_roles = [scope] if scope else ["public"]
+
+    for role in section_roles:
+        if role not in SECTION_VOCAB:
+            raise ValueError(
+                f"kb_binding.scope section role {role!r} not in {sorted(SECTION_VOCAB)}"
+            )
+
+    return section_roles
 
 
 def build_agent_config(
@@ -145,12 +186,7 @@ def create_recipe_d4(
         scope=scope,
     )
 
-    # Extract tenant and section_roles from scope ("ankor/public")
-    if "/" in scope:
-        _, roles_part = scope.split("/", 1)
-        section_roles = [r.strip() for r in roles_part.split(",") if r.strip()]
-    else:
-        section_roles = [scope] if scope else ["public"]
+    section_roles = _parse_kb_scope(scope, t_id)
 
     nodes = [
         Node(
@@ -221,12 +257,7 @@ def create_recipe_d6(
         scope=scope,
     )
 
-    # Extract section_roles from scope (e.g. "ankor/public" -> section_roles=["public"])
-    if "/" in scope:
-        _, roles_part = scope.split("/", 1)
-        section_roles = [r.strip() for r in roles_part.split(",") if r.strip()]
-    else:
-        section_roles = [scope] if scope else ["public"]
+    section_roles = _parse_kb_scope(scope, t_id)
 
     nodes = [
         Node(
@@ -270,6 +301,8 @@ def create_recipe_d6(
 
 __all__ = [
     "ANKOR_ID",
+    "BOREA_ID",
+    "SECTION_VOCAB",
     "build_agent_config",
     "create_dynamic_recipe",
     "create_recipe_d3",
