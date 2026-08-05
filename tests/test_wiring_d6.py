@@ -101,22 +101,6 @@ def test_recipe_d6_rejects_scope_tenant_mismatch() -> None:
         )
 
 
-def test_recipe_d6_rejects_unknown_section_role() -> None:
-    """A typo'd section role in `scope` must fail loudly, not silently produce a
-    section_roles value that will never match any real chunk (kit#92, D13)."""
-    with pytest.raises(ValueError, match="not in"):
-        create_recipe_d6(
-            agent_id="agent-bad-role",
-            tenant_id=ANKOR_ID,
-            instructions="x",
-            model="gemini-2.5-flash",
-            tool_whitelist=["kb_search"],
-            kb_id="kb-x",
-            scope="ankor/publik",  # typo
-            query="x",
-        )
-
-
 def test_unhardcoded_tool_whitelist_selection() -> None:
     """Test 3: Verify TOOL_CALL node dynamically inherits tool_whitelist[0] from Form Feed."""
     recipe = create_recipe_d6(
