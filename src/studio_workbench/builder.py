@@ -55,9 +55,7 @@ def _parse_kb_scope(scope: str, tenant_id: UUID) -> list[str]:
 
     for role in section_roles:
         if role not in SECTION_VOCAB:
-            raise ValueError(
-                f"kb_binding.scope section role {role!r} not in {sorted(SECTION_VOCAB)}"
-            )
+            raise ValueError(f"kb_binding.scope section role {role!r} not in {sorted(SECTION_VOCAB)}")
 
     return section_roles
 
