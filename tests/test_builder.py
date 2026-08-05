@@ -150,7 +150,7 @@ def test_legacy_builders_compatibility() -> None:
         model="gemini-2.5-flash",
         tool_whitelist=["kb_search"],
         kb_id="kb1",
-        scope="public",
+        scope="ankor/public",
         query="query",
     )
     assert r6.agent_id == "d6-agent"
