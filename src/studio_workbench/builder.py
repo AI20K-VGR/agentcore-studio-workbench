@@ -48,9 +48,7 @@ def _parse_kb_scope(scope: str, tenant_id: UUID) -> list[str]:
         raise ValueError(f"scope không được rỗng, nhận được: {scope!r}")
 
     if "/" not in scope:
-        raise ValueError(
-            f"scope phải có dạng '<tenant>/<roles>', không có '/' trong: {scope!r}"
-        )
+        raise ValueError(f"scope phải có dạng '<tenant>/<roles>', không có '/' trong: {scope!r}")
 
     tenant_slug, roles_part = scope.split("/", 1)
     tenant_slug = tenant_slug.strip()
@@ -59,10 +57,7 @@ def _parse_kb_scope(scope: str, tenant_id: UUID) -> list[str]:
         raise ValueError(f"Tenant slug rỗng trong scope: {scope!r}")
 
     if tenant_slug not in _SCOPE_TENANT_SLUGS:
-        raise ValueError(
-            f"Tenant slug không hợp lệ: {tenant_slug!r}. "
-            f"Các slug hợp lệ: {sorted(_SCOPE_TENANT_SLUGS)}"
-        )
+        raise ValueError(f"Tenant slug không hợp lệ: {tenant_slug!r}. Các slug hợp lệ: {sorted(_SCOPE_TENANT_SLUGS)}")
 
     expected_id = _SCOPE_TENANT_SLUGS[tenant_slug]
     if expected_id != tenant_id:
@@ -74,13 +69,9 @@ def _parse_kb_scope(scope: str, tenant_id: UUID) -> list[str]:
     section_roles = [r.strip() for r in roles_part.split(",") if r.strip()]
 
     if not section_roles:
-        raise ValueError(
-            f"Phần roles trong scope rỗng: {scope!r}. "
-            "Cần ít nhất một role (vd: 'public', 'hr')."
-        )
+        raise ValueError(f"Phần roles trong scope rỗng: {scope!r}. Cần ít nhất một role (vd: 'public', 'hr').")
 
     return section_roles
-
 
 
 def build_agent_config(
