@@ -21,40 +21,41 @@ from studio_contracts import (
 ANKOR_ID = UUID("a0000000-0000-0000-0000-000000000001")
 BOREA_ID = UUID("b0000000-0000-0000-0000-000000000001")
 
-# Canonical mapping: tenant slug -> UUID, cho các tenant NGHIỆP VỤ THẬT đã biết trước.
-# Đây không phải danh sách trắng đóng cho MỌI tenant hệ thống — caller ngoài phạm vi này
-# (vd: eval-harness của app dùng tenant tổng hợp/per-test) không có "slug chính danh" để
-# đối chiếu, nên guard bên dưới chỉ fail-closed khi có thể chứng minh được sự sai lệch.
-_SCOPE_TENANT_SLUGS: dict[str, UUID] = {
-    "ankor": ANKOR_ID,
-    "borea": BOREA_ID,
-}
-_CANONICAL_TENANT_SLUGS: dict[UUID, str] = {v: k for k, v in _SCOPE_TENANT_SLUGS.items()}
+# Hai tenant nghiệp vụ thật đã biết trước — dùng để giới hạn phạm vi của guard "roles không
+# được rỗng" bên dưới, KHÔNG dùng để cross-check slug (xem docstring _parse_kb_scope: PR #16
+# từng làm vậy rồi bị revert ở kit#92/workbench#17 vì đụng cả 2 quadrant khác — INV-1 test của
+# kb cố tình dựng recipe với slug/tenant_id lệch nhau, và eval-harness của app dùng slug
+# placeholder "t" bất kể tenant_id là tổng hợp hay thật).
+_KNOWN_TENANT_IDS: frozenset[UUID] = frozenset({ANKOR_ID, BOREA_ID})
 
 
 def _parse_kb_scope(scope: str, tenant_id: UUID) -> list[str]:
-    """Parse và validate chuỗi scope KB, fail-closed trên MỌI trường hợp kiểm chứng được.
+    """Parse chuỗi scope KB thành ``section_roles``, chỉ validate CẤU TRÚC.
 
-    Split ``kb_binding.scope`` (vd: ``"ankor/public, hr"``) thành ``section_roles``
-    và guard chống scope silent-disagree với ``tenant_id`` (kit#92, D13).
+    Split ``kb_binding.scope`` (vd: ``"ankor/public, hr"``) thành ``section_roles``.
 
-    Format hợp lệ: ``"<tenant_slug>/<role1>, <role2>, ..."``
+    Format hợp lệ: ``"<tenant_slug>/<role1>, <role2>, ..."`` — ``tenant_slug`` KHÔNG được
+    cross-check với ``tenant_id`` (đã bỏ ở kit#92/workbench#17). Bản gốc (workbench#16) chặn
+    slug ngoài ``{ankor, borea}`` hoặc lệch với ``tenant_id``, đúng ý P1 review gốc của
+    dholmes0207 — nhưng recipe-build-time là SAI CHỖ để chặn việc đó:
 
-    Cross-check slug ↔ ``tenant_id`` (bao gồm cả "roles không được rỗng") chỉ chạy khi MỘT
-    trong hai phía là tenant nghiệp vụ đã biết (``ankor``/``borea``) — vì chỉ hai tenant đó
-    mới có "sự thật" để đối chiếu. Tenant tổng hợp/per-test (vd: eval-harness của app, slug
-    ``"t"`` với UUID tự sinh) không nằm trong bảng, nên đi qua nguyên trạng — kể cả
-    ``section_roles=[]`` (rỗng có chủ đích, fail-closed dời xuống ``kb.search`` — KHÓA B8b
-    của app). Guard này bắt lỗi copy-paste giữa 2 tenant nghiệp vụ thật, không phải danh
-    sách trắng đóng cho toàn bộ hệ thống.
+    - ``packages/kb/tests/test_spine_live.py`` dựng recipe với ``tenant_id`` (attacker khai)
+      lệch CÓ CHỦ ĐÍCH với slug trong scope, để kiểm INV-1 (session phải thắng chứ không phải
+      recipe tự khai) — chặn ở build-time thì bài test không bao giờ chạy tới đoạn nó kiểm.
+    - ``apps/studio/src/studio_app/eval_adapter.py`` dùng slug placeholder ``"t"`` cho MỌI
+      tenant (kể cả ankor/borea thật trong test Postgres) — không có quy ước nào để phân biệt
+      "t" cố ý với một lỗi gõ thật.
+
+    Việc bắt lỗi gõ-sai-slug/lệch-tenant giờ thuộc trách nhiệm của tầng khác (nơi thật sự
+    dùng ``tenant_id`` để query, vd: session-resolve ở ``tenant_wall.py`` — session luôn thắng
+    recipe tự khai, đó là INV-1), không phải ở đây nữa.
 
     Section-role values không được validate ở đây — workbench không own KB schema.
     Role không tồn tại sẽ bị reject bởi ``kb.search`` tại query time với lỗi rõ ràng.
 
     Raises:
-        ValueError: Nếu scope rỗng, không có dấu ``/``, slug rỗng, hoặc — MÀ một trong hai
-            phía là tenant nghiệp vụ đã biết — slug không hợp lệ, slug/``tenant_id`` sai
-            lệch, hoặc phần roles rỗng.
+        ValueError: Nếu scope rỗng, không có dấu ``/``, slug rỗng, hoặc — khi ``tenant_id``
+            là 1 trong 2 tenant nghiệp vụ thật (``ANKOR_ID``/``BOREA_ID``) — phần roles rỗng.
     """
     if not scope or not scope.strip():
         raise ValueError(f"scope không được rỗng, nhận được: {scope!r}")
@@ -68,30 +69,12 @@ def _parse_kb_scope(scope: str, tenant_id: UUID) -> list[str]:
     if not tenant_slug:
         raise ValueError(f"Tenant slug rỗng trong scope: {scope!r}")
 
-    tenant_is_checkable = tenant_slug in _SCOPE_TENANT_SLUGS or tenant_id in _CANONICAL_TENANT_SLUGS
-
-    if tenant_is_checkable:
-        if tenant_slug not in _SCOPE_TENANT_SLUGS:
-            # tenant_id là tenant nghiệp vụ thật (vd: ANKOR_ID) nhưng slug không phải tên
-            # đúng của nó — typo hoặc slug của tenant khác bị dán nhầm vào. Đây chính là ca
-            # gốc mà guard này sinh ra để bắt (kit#92).
-            raise ValueError(
-                f"Tenant slug không hợp lệ: {tenant_slug!r}. Các slug hợp lệ: {sorted(_SCOPE_TENANT_SLUGS)}"
-            )
-        expected_id = _SCOPE_TENANT_SLUGS[tenant_slug]
-        if expected_id != tenant_id:
-            raise ValueError(
-                f"kb_binding.scope tenant slug {tenant_slug!r} does not match tenant_id={tenant_id} "
-                f"(slug {tenant_slug!r} maps to {expected_id})"
-            )
-
     section_roles = [r.strip() for r in roles_part.split(",") if r.strip()]
 
-    if not section_roles and tenant_is_checkable:
-        # Rỗng có chủ đích trên tenant tổng hợp/per-test (vd: eval-harness của app) được đi
-        # qua nguyên trạng — downstream kb.search fail-closed trên roles=[] (không role nào
-        # được cấp ngầm). Chỉ tenant nghiệp vụ thật mới bị chặn ở đây, vì "ankor/" gần như
-        # chắc chắn là quên gõ role chứ không phải chủ đích khoá hết quyền.
+    if not section_roles and tenant_id in _KNOWN_TENANT_IDS:
+        # Rỗng có chủ đích trên tenant tổng hợp/per-test (vd: eval-harness của app, KHÓA B8b)
+        # được đi qua nguyên trạng — downstream kb.search fail-closed trên roles=[]. Chỉ tenant
+        # nghiệp vụ thật mới bị chặn ở đây: "ankor/" gần như chắc chắn là quên gõ role.
         raise ValueError(f"Phần roles trong scope rỗng: {scope!r}. Cần ít nhất một role (vd: 'public', 'hr').")
 
     return section_roles
@@ -337,7 +320,6 @@ def create_recipe_d6(
 __all__ = [
     "ANKOR_ID",
     "BOREA_ID",
-    "_SCOPE_TENANT_SLUGS",
     "_parse_kb_scope",
     "build_agent_config",
     "create_dynamic_recipe",

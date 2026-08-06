@@ -85,21 +85,26 @@ def test_recipe_d6_scope_parsing_multi_roles() -> None:
     assert n1.params.get("section_roles") == ["public", "hr", "finance"]
 
 
-def test_recipe_d6_rejects_scope_tenant_mismatch() -> None:
-    """kb_binding.scope tenant slug (e.g. "borea") must agree with the tenant_id UUID
-    actually passed in — otherwise node.params["tenant_id"] and node.params["section_roles"]
-    would silently describe two different tenants (kit#92, D13)."""
-    with pytest.raises(ValueError, match="does not match tenant_id"):
-        create_recipe_d6(
-            agent_id="agent-mismatch",
-            tenant_id=ANKOR_ID,
-            instructions="x",
-            model="gemini-2.5-flash",
-            tool_whitelist=["kb_search"],
-            kb_id="kb-x",
-            scope="borea/hr",  # slug disagrees with tenant_id=ANKOR_ID
-            query="x",
-        )
+def test_recipe_d6_allows_scope_tenant_slug_disagreement() -> None:
+    """kb_binding.scope tenant slug (e.g. "borea") KHÔNG bị cross-check với tenant_id thật
+    truyền vào — bỏ ở kit#92/workbench#17 sau khi bump pointer vỡ 2 quadrant khác:
+    packages/kb's INV-1 test (test_spine_live.py) cố tình dựng recipe với tenant_id (attacker
+    khai) lệch scope, và apps/studio's eval-harness dùng slug placeholder "t" bất kể tenant_id
+    thật hay tổng hợp. Chặn ở recipe-build-time là sai chỗ; INV-1 (session luôn thắng recipe tự
+    khai) được enforce ở tenant_wall.py, không phải ở đây."""
+    recipe = create_recipe_d6(
+        agent_id="agent-mismatch",
+        tenant_id=ANKOR_ID,
+        instructions="x",
+        model="gemini-2.5-flash",
+        tool_whitelist=["kb_search"],
+        kb_id="kb-x",
+        scope="borea/hr",  # slug lệch tenant_id=ANKOR_ID — được phép, xem docstring
+        query="x",
+    )
+    n1 = recipe.dag.nodes[0]
+    assert n1.params.get("tenant_id") == ANKOR_ID
+    assert n1.params.get("section_roles") == ["hr"]
 
 
 def test_unhardcoded_tool_whitelist_selection() -> None:
@@ -208,19 +213,16 @@ async def test_wiring_d6_with_kb_search_execution() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Negative tests — [P1] Fail closed on unknown or malformed tenant scopes
-# (requested by dholmes0207 in PR #16 review)
+# Negative tests — structural validation only (malformed scope string).
+# PR #16 (dholmes0207's P1 review) originally also fail-closed on unknown
+# tenant slugs and slug/tenant_id disagreement — removed at kit#92/workbench#17,
+# see the block below this one for why.
 # ---------------------------------------------------------------------------
 
 
-def test_parse_kb_scope_rejects_typo_slug() -> None:
-    """Typo trong tenant slug ('boera' thay vì 'borea') phải bị reject ngay."""
-    with pytest.raises(ValueError, match="Tenant slug không hợp lệ"):
-        _parse_kb_scope("boera/hr", BOREA_ID)
-
-
 def test_parse_kb_scope_rejects_empty_roles() -> None:
-    """scope='ankor/' (không có role nào) phải bị reject."""
+    """scope='ankor/' (không có role nào) trên tenant nghiệp vụ thật phải bị reject —
+    gần như chắc chắn là quên gõ role, không phải chủ đích khoá hết quyền."""
     with pytest.raises(ValueError, match="roles trong scope rỗng"):
         _parse_kb_scope("ankor/", ANKOR_ID)
 
@@ -237,17 +239,13 @@ def test_parse_kb_scope_rejects_no_slash() -> None:
         _parse_kb_scope("public", ANKOR_ID)
 
 
-def test_parse_kb_scope_rejects_tenant_uuid_mismatch() -> None:
-    """slug hợp lệ nhưng UUID không khớp phải bị reject."""
-    with pytest.raises(ValueError, match="does not match"):
-        # slug 'ankor' map tới ANKOR_ID nhưng truyền vào BOREA_ID
-        _parse_kb_scope("ankor/public", BOREA_ID)
-
-
 # ---------------------------------------------------------------------------
-# Negative + positive tests — tenant tổng hợp/per-test (app#3 eval-harness,
-# kit#92 hotfix): guard chỉ cross-check khi có tenant nghiệp vụ thật ở một
-# trong hai phía; ngoài phạm vi đó thì không có gì để đối chiếu.
+# kit#92/workbench#17 — bump pointer thật vào kit lộ ra guard gốc (workbench#16)
+# đụng 2 quadrant khác: kb's INV-1 test (slug/tenant_id lệch CÓ CHỦ ĐÍCH để kiểm
+# session-thắng-recipe-tự-khai) và app's eval-harness (slug placeholder "t" trên
+# CẢ tenant thật lẫn tổng hợp). Không có cách nào cross-check slug↔tenant_id mà
+# không vỡ 1 trong 2 — nên bỏ hẳn, chỉ giữ validate cấu trúc + roles-không-rỗng
+# trên tenant thật. Các test dưới khoá lại đúng hành vi PERMISSIVE này.
 # ---------------------------------------------------------------------------
 
 _SYNTHETIC_TENANT_ID = UUID("b0000000-0000-0000-0000-000000000002")  # KHÔNG phải BOREA_ID
@@ -255,31 +253,39 @@ _SYNTHETIC_TENANT_ID = UUID("b0000000-0000-0000-0000-000000000002")  # KHÔNG ph
 
 def test_parse_kb_scope_allows_synthetic_tenant_with_placeholder_slug() -> None:
     """Tenant tổng hợp (không phải ankor/borea) với slug placeholder tuỳ ý (vd: 't', dùng
-    bởi eval-harness của app — app#3 eval_adapter.py) phải ĐI QUA, không bị reject: không
-    có tenant nghiệp vụ thật nào ở đây để mà cross-check sai lệch."""
+    bởi eval-harness của app — app#3 eval_adapter.py) phải ĐI QUA, không bị reject."""
     assert _parse_kb_scope("t/public", _SYNTHETIC_TENANT_ID) == ["public"]
 
 
-def test_parse_kb_scope_rejects_known_slug_on_unrelated_tenant() -> None:
-    """slug là tên tenant nghiệp vụ thật ('ankor') nhưng tenant_id lại là một tenant tổng
-    hợp không liên quan — vẫn phải bị reject, vì slug NÀY có sự thật để đối chiếu."""
-    with pytest.raises(ValueError, match="does not match"):
-        _parse_kb_scope("ankor/public", _SYNTHETIC_TENANT_ID)
+def test_parse_kb_scope_allows_placeholder_slug_on_real_tenant() -> None:
+    """Slug placeholder ('t') CÙNG với tenant_id THẬT (vd: ANKOR_ID trong test Postgres của
+    app — test_kb_search_live_readiness.py) cũng phải ĐI QUA: không có quy ước nào phân biệt
+    được "t" cố ý với lỗi gõ thật, nên guard không còn cố phân biệt nữa (kit#92/workbench#17)."""
+    assert _parse_kb_scope("t/public", ANKOR_ID) == ["public"]
 
 
-def test_create_recipe_d6_rejects_typo_slug() -> None:
-    """create_recipe_d6 với typo slug phải raise ValueError tại build time."""
-    with pytest.raises(ValueError, match="Tenant slug không hợp lệ"):
-        create_recipe_d6(
-            agent_id="agent-bad-scope",
-            tenant_id=BOREA_ID,
-            instructions="test",
-            model="gemini-2.5-flash",
-            tool_whitelist=["kb_search"],
-            kb_id="kb-test",
-            scope="boera/hr",  # typo: 'boera' thay vì 'borea'
-            query="test query",
-        )
+def test_parse_kb_scope_allows_slug_tenant_disagreement_on_two_real_tenants() -> None:
+    """slug 'ankor' cùng tenant_id=BOREA_ID (2 tenant thật, cố tình lệch nhau) phải ĐI QUA —
+    đây chính xác là kịch bản INV-1 mà packages/kb/tests/test_spine_live.py cần dựng được để
+    kiểm session luôn thắng recipe tự khai (kit#92/workbench#17)."""
+    assert _parse_kb_scope("ankor/public", BOREA_ID) == ["public"]
+
+
+def test_create_recipe_d6_allows_typo_slug() -> None:
+    """create_recipe_d6 KHÔNG còn raise trên slug lạ/typo ('boera') — bỏ ở
+    kit#92/workbench#17 cùng lý do với test_recipe_d6_allows_scope_tenant_slug_disagreement."""
+    recipe = create_recipe_d6(
+        agent_id="agent-bad-scope",
+        tenant_id=BOREA_ID,
+        instructions="test",
+        model="gemini-2.5-flash",
+        tool_whitelist=["kb_search"],
+        kb_id="kb-test",
+        scope="boera/hr",  # typo: 'boera' thay vì 'borea' — được phép, xem docstring _parse_kb_scope
+        query="test query",
+    )
+    n1 = recipe.dag.nodes[0]
+    assert n1.params.get("section_roles") == ["hr"]
 
 
 def test_create_recipe_d6_rejects_empty_roles() -> None:
