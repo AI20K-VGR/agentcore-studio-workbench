@@ -244,6 +244,29 @@ def test_parse_kb_scope_rejects_tenant_uuid_mismatch() -> None:
         _parse_kb_scope("ankor/public", BOREA_ID)
 
 
+# ---------------------------------------------------------------------------
+# Negative + positive tests — tenant tổng hợp/per-test (app#3 eval-harness,
+# kit#92 hotfix): guard chỉ cross-check khi có tenant nghiệp vụ thật ở một
+# trong hai phía; ngoài phạm vi đó thì không có gì để đối chiếu.
+# ---------------------------------------------------------------------------
+
+_SYNTHETIC_TENANT_ID = UUID("b0000000-0000-0000-0000-000000000002")  # KHÔNG phải BOREA_ID
+
+
+def test_parse_kb_scope_allows_synthetic_tenant_with_placeholder_slug() -> None:
+    """Tenant tổng hợp (không phải ankor/borea) với slug placeholder tuỳ ý (vd: 't', dùng
+    bởi eval-harness của app — app#3 eval_adapter.py) phải ĐI QUA, không bị reject: không
+    có tenant nghiệp vụ thật nào ở đây để mà cross-check sai lệch."""
+    assert _parse_kb_scope("t/public", _SYNTHETIC_TENANT_ID) == ["public"]
+
+
+def test_parse_kb_scope_rejects_known_slug_on_unrelated_tenant() -> None:
+    """slug là tên tenant nghiệp vụ thật ('ankor') nhưng tenant_id lại là một tenant tổng
+    hợp không liên quan — vẫn phải bị reject, vì slug NÀY có sự thật để đối chiếu."""
+    with pytest.raises(ValueError, match="does not match"):
+        _parse_kb_scope("ankor/public", _SYNTHETIC_TENANT_ID)
+
+
 def test_create_recipe_d6_rejects_typo_slug() -> None:
     """create_recipe_d6 với typo slug phải raise ValueError tại build time."""
     with pytest.raises(ValueError, match="Tenant slug không hợp lệ"):
