@@ -21,28 +21,40 @@ from studio_contracts import (
 ANKOR_ID = UUID("a0000000-0000-0000-0000-000000000001")
 BOREA_ID = UUID("b0000000-0000-0000-0000-000000000001")
 
-# Canonical mapping: tenant slug -> UUID.
-# Fail-closed: mọi slug không nằm trong bảng này đều bị reject ngay tại build time.
+# Canonical mapping: tenant slug -> UUID, cho các tenant NGHIỆP VỤ THẬT đã biết trước.
+# Đây không phải danh sách trắng đóng cho MỌI tenant hệ thống — caller ngoài phạm vi này
+# (vd: eval-harness của app dùng tenant tổng hợp/per-test) không có "slug chính danh" để
+# đối chiếu, nên guard bên dưới chỉ fail-closed khi có thể chứng minh được sự sai lệch.
 _SCOPE_TENANT_SLUGS: dict[str, UUID] = {
     "ankor": ANKOR_ID,
     "borea": BOREA_ID,
 }
+_CANONICAL_TENANT_SLUGS: dict[UUID, str] = {v: k for k, v in _SCOPE_TENANT_SLUGS.items()}
 
 
 def _parse_kb_scope(scope: str, tenant_id: UUID) -> list[str]:
-    """Parse và validate chuỗi scope KB, fail-closed trên mọi input sai.
+    """Parse và validate chuỗi scope KB, fail-closed trên MỌI trường hợp kiểm chứng được.
 
     Split ``kb_binding.scope`` (vd: ``"ankor/public, hr"``) thành ``section_roles``
     và guard chống scope silent-disagree với ``tenant_id`` (kit#92, D13).
 
     Format hợp lệ: ``"<tenant_slug>/<role1>, <role2>, ..."``
 
+    Cross-check slug ↔ ``tenant_id`` (bao gồm cả "roles không được rỗng") chỉ chạy khi MỘT
+    trong hai phía là tenant nghiệp vụ đã biết (``ankor``/``borea``) — vì chỉ hai tenant đó
+    mới có "sự thật" để đối chiếu. Tenant tổng hợp/per-test (vd: eval-harness của app, slug
+    ``"t"`` với UUID tự sinh) không nằm trong bảng, nên đi qua nguyên trạng — kể cả
+    ``section_roles=[]`` (rỗng có chủ đích, fail-closed dời xuống ``kb.search`` — KHÓA B8b
+    của app). Guard này bắt lỗi copy-paste giữa 2 tenant nghiệp vụ thật, không phải danh
+    sách trắng đóng cho toàn bộ hệ thống.
+
     Section-role values không được validate ở đây — workbench không own KB schema.
     Role không tồn tại sẽ bị reject bởi ``kb.search`` tại query time với lỗi rõ ràng.
 
     Raises:
-        ValueError: Nếu scope rỗng, không có dấu ``/``, slug không hợp lệ,
-            slug map sai UUID, hoặc phần roles rỗng.
+        ValueError: Nếu scope rỗng, không có dấu ``/``, slug rỗng, hoặc — MÀ một trong hai
+            phía là tenant nghiệp vụ đã biết — slug không hợp lệ, slug/``tenant_id`` sai
+            lệch, hoặc phần roles rỗng.
     """
     if not scope or not scope.strip():
         raise ValueError(f"scope không được rỗng, nhận được: {scope!r}")
@@ -56,19 +68,30 @@ def _parse_kb_scope(scope: str, tenant_id: UUID) -> list[str]:
     if not tenant_slug:
         raise ValueError(f"Tenant slug rỗng trong scope: {scope!r}")
 
-    if tenant_slug not in _SCOPE_TENANT_SLUGS:
-        raise ValueError(f"Tenant slug không hợp lệ: {tenant_slug!r}. Các slug hợp lệ: {sorted(_SCOPE_TENANT_SLUGS)}")
+    tenant_is_checkable = tenant_slug in _SCOPE_TENANT_SLUGS or tenant_id in _CANONICAL_TENANT_SLUGS
 
-    expected_id = _SCOPE_TENANT_SLUGS[tenant_slug]
-    if expected_id != tenant_id:
-        raise ValueError(
-            f"kb_binding.scope tenant slug {tenant_slug!r} does not match tenant_id={tenant_id} "
-            f"(slug {tenant_slug!r} maps to {expected_id})"
-        )
+    if tenant_is_checkable:
+        if tenant_slug not in _SCOPE_TENANT_SLUGS:
+            # tenant_id là tenant nghiệp vụ thật (vd: ANKOR_ID) nhưng slug không phải tên
+            # đúng của nó — typo hoặc slug của tenant khác bị dán nhầm vào. Đây chính là ca
+            # gốc mà guard này sinh ra để bắt (kit#92).
+            raise ValueError(
+                f"Tenant slug không hợp lệ: {tenant_slug!r}. Các slug hợp lệ: {sorted(_SCOPE_TENANT_SLUGS)}"
+            )
+        expected_id = _SCOPE_TENANT_SLUGS[tenant_slug]
+        if expected_id != tenant_id:
+            raise ValueError(
+                f"kb_binding.scope tenant slug {tenant_slug!r} does not match tenant_id={tenant_id} "
+                f"(slug {tenant_slug!r} maps to {expected_id})"
+            )
 
     section_roles = [r.strip() for r in roles_part.split(",") if r.strip()]
 
-    if not section_roles:
+    if not section_roles and tenant_is_checkable:
+        # Rỗng có chủ đích trên tenant tổng hợp/per-test (vd: eval-harness của app) được đi
+        # qua nguyên trạng — downstream kb.search fail-closed trên roles=[] (không role nào
+        # được cấp ngầm). Chỉ tenant nghiệp vụ thật mới bị chặn ở đây, vì "ankor/" gần như
+        # chắc chắn là quên gõ role chứ không phải chủ đích khoá hết quyền.
         raise ValueError(f"Phần roles trong scope rỗng: {scope!r}. Cần ít nhất một role (vd: 'public', 'hr').")
 
     return section_roles
