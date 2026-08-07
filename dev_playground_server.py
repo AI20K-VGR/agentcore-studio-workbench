@@ -68,6 +68,7 @@ from studio_engine.demo_stubs import EmptyEmbedding
 from studio_kb.doc_factory import TENANT_IDS
 from studio_kb.static_search import StaticKbSearch
 from studio_kb.trace_reader import render_timeline, walk_from_dag
+
 from studio_workbench.tenant_wall import resolve_session
 
 # Nguồn sự thật DUY NHẤT cho UUID tenant demo — import thẳng từ `studio_kb.doc_factory`
@@ -255,7 +256,8 @@ class _Handler(BaseHTTPRequestHandler):
             return
         run_id = parts[2]
         qs = parse_qs(split.query)
-        tenant_raw = (qs.get("tenant_id") or [None])[0]
+        tenant_values = qs.get("tenant_id")
+        tenant_raw = tenant_values[0] if tenant_values else None
         if not tenant_raw:
             self._error(400, "thiếu query param `tenant_id` — trace đọc lại cũng phải qua fence tenant")
             return
@@ -286,7 +288,9 @@ class _Handler(BaseHTTPRequestHandler):
 def main() -> None:
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8787
     httpd = ThreadingHTTPServer(("127.0.0.1", port), _Handler)
-    print(f"[playground-dev] listening on http://127.0.0.1:{port}  (POST /api/runs, GET /api/runs/<run_id>?tenant_id=...)")
+    print(
+        f"[playground-dev] listening on http://127.0.0.1:{port}  (POST /api/runs, GET /api/runs/<run_id>?tenant_id=...)"
+    )
     print(f"[playground-dev] tenant demo: ankor={ANKOR_ID}  borea={BOREA_ID}")
     try:
         httpd.serve_forever()
