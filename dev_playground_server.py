@@ -46,12 +46,22 @@ node) để soi đúng bất kỳ canvas nào. Không phải bản sao chép —
 thật của DE trên events tự sinh ra, và DE không cần đổi gì để việc này chạy (hàm vốn đã nhận
 `list[TraceEvent]` chung chung, không khoá vào `PgTraceReader`/Postgres).
 
+`score` trên cả 2 response — output THẬT của `score_run_from_trace()` (`studio_evalhub.run_report`,
+AIE-2 — PR#15 D15 #103), CÙNG cơ chế với `timeline_text`. Điểm khác biệt: `studio_evalhub` chưa
+merge PR#15 tính đến lúc file này viết, nên `run_report` được import trong `try/except ImportError`
+ở module-level — thiếu package đó KHÔNG được phép làm sập cả server (3/4 phần SWE/AIE-1/DE vẫn
+phải chạy bình thường). Sau khi AIE-2 merge + `git submodule update packages/evalhub`, field `score`
+tự nhiên có giá trị thật ở lần chạy TIẾP THEO — không cần sửa lại file này. `_case_by_id` là hàm
+private (`_`-prefix) của họ — chấp nhận giòn (fragile) đổi lấy 1 lần gọi, ghi rõ ở đây để ai đọc
+sau không tưởng đây là API công khai.
+
 Chạy: `uv run python packages/workbench/dev_playground_server.py [port=8787]`
 """
 
 from __future__ import annotations
 
 import asyncio
+import importlib
 import json
 import re
 import sys
@@ -70,6 +80,21 @@ from studio_kb.static_search import StaticKbSearch
 from studio_kb.trace_reader import render_timeline, walk_from_dag
 
 from studio_workbench.tenant_wall import resolve_session
+
+try:
+    # PR evalhub#15 (D15 #103, AIE-2) — chưa merge tính đến lúc viết file này. Guard bằng
+    # try/except NGAY Ở MODULE LEVEL: nếu để `ImportError` văng thẳng, toàn bộ server sập lúc
+    # khởi động (kể cả phần SWE/AIE-1/DE đang chạy tốt) chỉ vì thiếu 1 package của người khác
+    # chưa merge — đó là lý do KHÔNG import thẳng như 3 collaborator kia ở trên.
+    #
+    # `importlib.import_module()` (chuỗi, KHÔNG phải `from studio_evalhub.run_report import
+    # ...` tĩnh) cố ý: mypy strict resolve import tĩnh ở compile-time và sẽ đỏ thật
+    # ("Cannot find implementation... studio_evalhub.run_report") ngay cả khi bọc try/except
+    # runtime — package đó THẬT SỰ chưa tồn tại, không phải mypy nhầm. Import động là cách
+    # chuẩn cho optional dependency, không phải `type: ignore` che lỗi thật.
+    _run_report: Any = importlib.import_module("studio_evalhub.run_report")
+except ImportError:
+    _run_report = None
 
 # Nguồn sự thật DUY NHẤT cho UUID tenant demo — import thẳng từ `studio_kb.doc_factory`
 # (DE) thay vì hand-copy lại như bản trước, để không thể lệch với dữ liệu `StaticKbSearch`
@@ -140,6 +165,38 @@ _TRACE_WRITER = InMemoryTraceWriter()
 # `walk_from_dag`) rồi lưu lại, vì `do_GET` không giữ `recipe` — tránh phải tái tạo `expected`
 # từ chính `events` (vòng lặp, không phải nguồn kỳ vọng thật).
 _TIMELINE_TEXT: dict[str, str] = {}
+_SCORE: dict[str, dict[str, Any]] = {}
+
+# Case demo cố định — recipe mẫu (sample.ts) hỏi đúng câu hỏi của case này. KHÔNG có ánh xạ
+# golden_set_ref -> case_id thật (đó là việc của AIE-2/D16), nên 1 recipe tự do không khớp
+# case này thì `_score_run` trả về message giải thích, không phải điểm bịa.
+_DEMO_CASE_ID = "SC-01"
+
+
+def _score_run(events: list[TraceEvent]) -> dict[str, Any]:
+    """Chấm `events` bằng `score_run_from_trace()` THẬT của AIE-2 khi có sẵn (PR#15 merge).
+    Không bao giờ raise ra ngoài — mọi nhánh hỏng (chưa merge, case không khớp, trace không
+    chấm được) đều trả về 1 dict giải thích, để 3 phần kia (SWE/AIE-1/DE) không bị kéo sập
+    theo chỉ vì phần chấm điểm hỏng."""
+    if _run_report is None:
+        return {
+            "available": False,
+            "message": "PR evalhub#15 (AIE-2, D15 #103) chưa merge/chưa `git submodule update packages/evalhub`.",
+        }
+    try:
+        case = _run_report._case_by_id(_DEMO_CASE_ID)
+        answer = _run_report.answer_from_trace(events)
+        result = _run_report.score_run_from_trace(case, events)
+    except (LookupError, ValueError) as exc:
+        return {"available": True, "scored": False, "message": f"{type(exc).__name__}: {exc}"}
+    return {
+        "available": True,
+        "scored": True,
+        "case_id": str(result.case_id),
+        "success": bool(result.success),
+        "citation_accuracy": float(result.citation_accuracy),
+        "citations": list(answer.citations),
+    }
 
 
 async def _execute_run(recipe: Recipe) -> interpreter.RunResult:
@@ -236,6 +293,7 @@ class _Handler(BaseHTTPRequestHandler):
         # 4-node): 1 canvas tuỳ ý (có `condition`/`hitl-pause`...) vẫn được `render_timeline` soi
         # đúng, không báo "gap" giả vì so nhầm khuôn.
         _TIMELINE_TEXT[result.run_id] = render_timeline(result.events, expected=walk_from_dag(recipe.dag))
+        _SCORE[result.run_id] = _score_run(result.events)
 
         self._send_json(
             200,
@@ -245,6 +303,7 @@ class _Handler(BaseHTTPRequestHandler):
                 "tenant_id": str(recipe.tenant_id),
                 "events": [_event_json(e) for e in result.events],
                 "timeline_text": _TIMELINE_TEXT[result.run_id],
+                "score": _SCORE[result.run_id],
             },
         )
 
@@ -272,6 +331,7 @@ class _Handler(BaseHTTPRequestHandler):
         # 1 tenant nên text tính lúc POST vốn đã tenant-scoped, nhưng vẫn gate qua `events` ở đây
         # để 1 request tenant sai không đọc được text của tenant khác qua đường tắt này.
         timeline_text = _TIMELINE_TEXT.get(run_id) if events else None
+        score = _SCORE.get(run_id) if events else None
         self._send_json(
             200,
             {
@@ -281,6 +341,7 @@ class _Handler(BaseHTTPRequestHandler):
                 "tenant_id": str(tenant_id),
                 "events": [_event_json(e) for e in events],
                 "timeline_text": timeline_text,
+                "score": score,
             },
         )
 
