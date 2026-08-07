@@ -195,6 +195,14 @@ def _score_run(events: list[TraceEvent]) -> dict[str, Any]:
         "case_id": str(result.case_id),
         "success": bool(result.success),
         "citation_accuracy": float(result.citation_accuracy),
+        # C1 (review AIE-2, workbench#19 + web#3): case từ-chối có `citation_accuracy=1.0` do
+        # QUY ƯỚC vacuous-truth (evalhub DEC-04), KHÔNG phải phép đo — CLI `render_run_cases`
+        # in "n/a" cho đúng dòng đó. Thiếu cờ này thì payload không mang đủ thông tin để phía
+        # UI phân biệt "1.00 thật" với "1.00 vô nghĩa", nên UI trước đây in nhầm số đẹp nhất
+        # bảng lên đúng ô chưa đo gì. Không vá được ở phía web một mình — sửa ở đây.
+        # Đọc từ `result.expects_refusal` (SmokeResult tự mang field này), không phải
+        # `case.expects_refusal` riêng — cùng nguồn với success/citation_accuracy bên dưới.
+        "expects_refusal": bool(result.expects_refusal),
         "citations": list(answer.citations),
     }
 
@@ -327,9 +335,17 @@ class _Handler(BaseHTTPRequestHandler):
             return
 
         events = _TRACE_WRITER.read_run(run_id, tenant_id)
-        # `timeline_text` chỉ trả khi `events` (đã lọc tenant) không rỗng — 1 run chỉ thuộc đúng
-        # 1 tenant nên text tính lúc POST vốn đã tenant-scoped, nhưng vẫn gate qua `events` ở đây
-        # để 1 request tenant sai không đọc được text của tenant khác qua đường tắt này.
+        # `timeline_text`/`score` chỉ trả khi `events` (đã lọc tenant) không rỗng — 1 run chỉ
+        # thuộc đúng 1 tenant nên cache tính lúc POST vốn đã tenant-scoped, nhưng vẫn gate qua
+        # `events` ở đây để 1 request tenant sai không đọc được cache của tenant khác qua đường
+        # tắt này.
+        #
+        # Nit (review AIE-2, workbench#19): 2 dòng dưới đọc CACHE tính sẵn lúc POST
+        # (`_TIMELINE_TEXT`/`_SCORE`, không tính lại từ `events` vừa đọc) — GET ở đây độc lập
+        # với POST đúng ở phần `events` (tự tra lại `_TRACE_WRITER`, không tin thẳng response
+        # POST), nhưng KHÔNG độc lập ở 2 field này. Hợp lý cho dev server (tránh tính lại
+        # `render_timeline`/`score_run_from_trace` mỗi lần GET), chỉ cần biết trước nếu sau
+        # này ai dựa vào GET để đối chiếu chéo 2 field này với 1 phép tính khác.
         timeline_text = _TIMELINE_TEXT.get(run_id) if events else None
         score = _SCORE.get(run_id) if events else None
         self._send_json(
