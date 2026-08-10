@@ -103,7 +103,7 @@ def create_dynamic_recipe(
     edges: list[Edge],
     kb_id: str | None = None,
     scope: str | None = None,
-    golden_set_ref: str = "callisto-smoke-5-v0",
+    golden_set_ref: str = "callisto-golden-30-v1",
     success_threshold: float = 0.9,
     citation_accuracy_threshold: float = 0.95,
 ) -> Recipe:
@@ -238,7 +238,7 @@ def create_recipe_d4(
         agent_config=config,
         dag=Dag(nodes=nodes, edges=edges),
         kb_binding=kb_bind,
-        golden_set_ref="callisto-smoke-5-v0",
+        golden_set_ref="callisto-golden-30-v1",
         scorecard_threshold=ScorecardThreshold(success=0.9, citation_accuracy=0.95),
     )
 
@@ -252,7 +252,7 @@ def create_recipe_d6(
     kb_id: str,
     scope: str,
     query: str,
-    golden_set_ref: str = "callisto-smoke-5-v0",
+    golden_set_ref: str = "callisto-golden-30-v1",
     success_threshold: float = 0.9,
     citation_accuracy_threshold: float = 0.95,
 ) -> Recipe:

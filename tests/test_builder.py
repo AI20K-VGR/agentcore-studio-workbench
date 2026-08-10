@@ -157,6 +157,47 @@ def test_legacy_builders_compatibility() -> None:
     assert len(r6.dag.nodes) == 4
 
 
+def test_default_golden_set_ref_points_to_golden_30() -> None:
+    """D16 (kit#107): default `golden_set_ref` must pin to the real 30-case golden set, not the
+    stale 5-case smoke set. `create_recipe_d4` is the production call path
+    (`apps/studio/src/studio_app/eval_adapter.py:98`, called WITHOUT an explicit `golden_set_ref`)
+    — without this pin, a future edit/revert of the literal has zero local test signal (review
+    finding, TranBaDat2607, workbench#20)."""
+    nodes = [
+        Node(id="n1", type=NodeType.LLM_STEP, params={}),
+        Node(id="n2", type=NodeType.END, params={}),
+    ]
+    edges = [Edge(from_="n1", to="n2")]
+
+    r_dynamic = create_dynamic_recipe(
+        agent_id="agent-golden-ref-check",
+        tenant_id=ANKOR_ID,
+        instructions="inst",
+        model="gemini-2.5-flash",
+        tool_whitelist=[],
+        kb_id="kb-callisto-v1",
+        scope="ankor/public",
+        nodes=nodes,
+        edges=edges,
+    )
+    assert r_dynamic.golden_set_ref == "callisto-golden-30-v1"
+
+    r4 = create_recipe_d4()
+    assert r4.golden_set_ref == "callisto-golden-30-v1"
+
+    r6 = create_recipe_d6(
+        agent_id="d6-agent",
+        tenant_id=ANKOR_ID,
+        instructions="inst",
+        model="gemini-2.5-flash",
+        tool_whitelist=["kb_search"],
+        kb_id="kb1",
+        scope="ankor/public",
+        query="query",
+    )
+    assert r6.golden_set_ref == "callisto-golden-30-v1"
+
+
 class _NoOpTraceWriter:
     """Conforming no-op TraceWriter seam for wiring tests."""
 
