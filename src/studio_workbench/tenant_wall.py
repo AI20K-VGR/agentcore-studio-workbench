@@ -15,7 +15,7 @@ URL path param or request body. This is the 3-layer tenant fence (plan.md):
    sets the Postgres RLS session var (`SET LOCAL app.tenant_id`) for the request's connection.
 3. **RLS policy** (P5, kb fence) — the actual row-level enforcement keyed off that session var.
 
-A `resolve_tenant()` implementation that reads a client-supplied tenant field instead of deriving
+A `resolve_tenant_id()` implementation that reads a client-supplied tenant field instead of deriving
 it from the session recreates T1 — this is the exact bug this seam exists to prevent.
 
 INV-1 mandatory filter (fail-closed):
@@ -24,7 +24,7 @@ INV-1 mandatory filter (fail-closed):
 - `roles` defaults to `[]` when absent (empty roles is valid — least-privilege).
 - The resolved tenant_id MUST be a non-empty string (NOT NULL invariant).
 
-Day 8 implementation: `resolve_tenant()` and `resolve_session()` read from a session mapping
+Day 8 implementation: `resolve_tenant_id()` and `resolve_session()` read from a session mapping
 (dict-like object representing an auth-derived server-side session / JWT claims payload).
 """
 
@@ -69,7 +69,7 @@ _MISSING: Any = object()
 # ---------------------------------------------------------------------------
 
 
-def resolve_tenant(session: object) -> UUID:
+def resolve_tenant_id(session: object) -> UUID:
     """Resolve the tenant_id for `session`, server-side.
 
     Reads `tenant_id` exclusively from the server-derived session mapping.
@@ -97,7 +97,7 @@ def resolve_tenant(session: object) -> UUID:
         TypeError: If `session` is not a Mapping.
     """
     if not isinstance(session, Mapping):
-        raise TypeError(f"resolve_tenant: session must be a dict-like mapping, got {type(session).__name__!r}")
+        raise TypeError(f"resolve_tenant_id: session must be a dict-like mapping, got {type(session).__name__!r}")
 
     # Support both canonical key and alias
     tenant_id: Any = _MISSING
@@ -112,7 +112,7 @@ def resolve_tenant(session: object) -> UUID:
     # fail-closed: missing or None
     if tenant_id is _MISSING or tenant_id is None:
         raise PermissionError(
-            "resolve_tenant: tenant_id is absent from session — "
+            "resolve_tenant_id: tenant_id is absent from session — "
             "request rejected (INV-1 fail-closed, T1 IDOR prevention)"
         )
 
@@ -124,7 +124,7 @@ def resolve_tenant(session: object) -> UUID:
     tenant_str = str(tenant_id).strip()
     if not tenant_str:
         raise PermissionError(
-            "resolve_tenant: tenant_id is blank/empty — request rejected (INV-1 mandatory NOT NULL filter)"
+            "resolve_tenant_id: tenant_id is blank/empty — request rejected (INV-1 mandatory NOT NULL filter)"
         )
 
     # fail-closed: invalid UUID format
@@ -132,7 +132,7 @@ def resolve_tenant(session: object) -> UUID:
         return UUID(tenant_str)
     except ValueError:
         raise PermissionError(
-            f"resolve_tenant: tenant_id {tenant_str!r} is not a valid UUID — "
+            f"resolve_tenant_id: tenant_id {tenant_str!r} is not a valid UUID — "
             "request rejected (INV-1, DEC-B: tenant_id must be UUID)"
         ) from None
 
@@ -162,7 +162,7 @@ def resolve_session(session: object) -> ResolvedContext:
         TypeError: If ``session`` is not a Mapping.
     """
     # Resolve tenant (reuses the fail-closed logic above)
-    tenant_id = resolve_tenant(session)
+    tenant_id = resolve_tenant_id(session)
 
     # Resolve user — fail-closed
     user: Any = _MISSING
@@ -201,5 +201,5 @@ def resolve_session(session: object) -> ResolvedContext:
 __all__ = [
     "ResolvedContext",
     "resolve_session",
-    "resolve_tenant",
+    "resolve_tenant_id",
 ]

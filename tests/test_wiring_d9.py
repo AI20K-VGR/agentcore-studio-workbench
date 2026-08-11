@@ -46,7 +46,7 @@ from studio_contracts import (
 )
 
 from studio_workbench import create_dynamic_recipe, create_recipe_d6
-from studio_workbench.tenant_wall import resolve_session, resolve_tenant
+from studio_workbench.tenant_wall import resolve_session, resolve_tenant_id
 
 ANKOR_ID = UUID("a0000000-0000-0000-0000-000000000001")
 OTHER_ID = UUID("b0000000-0000-0000-0000-000000000002")
@@ -247,7 +247,7 @@ def test_resolve_tenant_raises_type_error_on_none_session() -> None:
     not be silently treated as an empty-but-valid mapping.
     """
     with pytest.raises(TypeError, match="dict-like mapping"):
-        resolve_tenant(None)
+        resolve_tenant_id(None)
 
 
 def test_resolve_tenant_rejects_non_uuid_numeric_tenant_id() -> None:
@@ -257,7 +257,7 @@ def test_resolve_tenant_rejects_non_uuid_numeric_tenant_id() -> None:
     session = {"tenant_id": 12345, "user": "dozyboy@ankor.vn"}
 
     with pytest.raises(PermissionError, match="UUID"):
-        resolve_tenant(session)
+        resolve_tenant_id(session)
 
 
 def test_resolve_session_filters_blank_entries_out_of_roles_list() -> None:
@@ -295,7 +295,7 @@ def test_create_recipe_d6_rejects_unexpected_tenant_like_keys() -> None:
 
     What this test does NOT claim: that the *caller* correctly resolves the session
     before calling this builder (that's an API-boundary responsibility, not the
-    builder's) - resolve_session()/resolve_tenant() correctness is covered by the rest
+    builder's) - resolve_session()/resolve_tenant_id() correctness is covered by the rest
     of this file's Group 3 and by test_wiring_d8.py. The actual INV-1 decision point
     (recipe-declared tenant vs. session-resolved tenant) lives at the composition root,
     interpreter.run(), covered by

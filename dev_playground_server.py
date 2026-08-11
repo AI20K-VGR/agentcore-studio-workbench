@@ -75,7 +75,7 @@ from pydantic import ValidationError
 from studio_contracts import Recipe, TraceEvent
 from studio_engine import interpreter
 from studio_engine.demo_stubs import EmptyEmbedding
-from studio_kb.doc_factory import TENANT_IDS
+from studio_kb.doc_factory import SECTION_VOCAB, TENANT_IDS
 from studio_kb.static_search import StaticKbSearch
 from studio_kb.trace_reader import render_timeline, walk_from_dag
 
@@ -208,7 +208,20 @@ def _score_run(events: list[TraceEvent]) -> dict[str, Any]:
 
 
 async def _execute_run(recipe: Recipe) -> interpreter.RunResult:
-    session = resolve_session({"tenant_id": recipe.tenant_id, "user": "playground-dev-user", "roles": []})
+    # `roles` = toàn bộ `SECTION_VOCAB` (SSOT `studio_kb.doc_factory`, KHÔNG hand-copy list "public/
+    # hr/finance/..."). Trước D17 đây là `[]`; sau khi `engine#21` (AIE-1, #111) merge, `interpreter`
+    # server-resolve `section_roles` từ đúng field này (đè lên recipe/canvas khai) — `[]` khiến
+    # playground deny-all mọi retrieval (0 chunk, luôn luôn), không có test nào import file này để
+    # báo đỏ (AIE-1 cảnh báo trên kit#112).
+    #
+    # Hướng A (chọn hôm nay, #112) — "phiên dev thấy hết": hardcode toàn bộ vocab để playground demo
+    # vẫn trả kết quả như trước PR#21. KHÔNG chứng minh được T6 đang chặn gì — mọi vai đều được cấp
+    # sẵn nên không có cảnh huống "canvas khai 1 đằng, phiên khai khác" để thấy hàng rào hoạt động.
+    # Hướng B (sau, #112): thêm 1 kênh chọn vai phiên tách khỏi `section_roles` recipe khai (vd query
+    # param riêng) — lúc đó mới demo được T6 thật trên chính playground này.
+    session = resolve_session(
+        {"tenant_id": recipe.tenant_id, "user": "playground-dev-user", "roles": list(SECTION_VOCAB)}
+    )
     # `_DevSessionContext` thay vì dùng thẳng `ResolvedContext` (dù nó đã khớp
     # Protocol) — tách riêng để chỗ dev-stub (docstring ở trên) đứng MỘT nơi,
     # không lẫn với `tenant_wall.resolve_session`'s hợp đồng thật (P7 seam).
