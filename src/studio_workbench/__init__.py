@@ -3,7 +3,7 @@
 Owner: SWE. Phase 7 fills in `wb.*` DDL (`schema.ddl()`) + the validator/publish/Tenant-Wall
 seams (all 3 ship as spec stubs — `NotImplementedError`, real bodies left for the SWE OJT
 candidate). `graph_lint`/`publish`/`rollback` are re-exported here for ergonomic top-level
-import (mirrors `studio_contracts`'s own `__init__.py` pattern); `resolve_tenant` (Tenant-Wall)
+import (mirrors `studio_contracts`'s own `__init__.py` pattern); `resolve_tenant_id` (Tenant-Wall)
 stays reachable only via its own `studio_workbench.tenant_wall` submodule.
 """
 
