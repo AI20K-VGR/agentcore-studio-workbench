@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 import pytest
@@ -76,7 +76,7 @@ def _invalid_recipe() -> Recipe:
     )
 
 
-def _scorecard(*, verdict: str, recipe_hash: str | None) -> Scorecard:
+def _scorecard(*, verdict: Literal["PASS", "FAIL"], recipe_hash: str | None) -> Scorecard:
     citation_accuracy = 1.0 if verdict == "PASS" else 0.0
     success_rate = 1.0 if verdict == "PASS" else 0.0
     return Scorecard(
@@ -88,7 +88,7 @@ def _scorecard(*, verdict: str, recipe_hash: str | None) -> Scorecard:
             )
         ],
         aggregate=Aggregate(success_rate=success_rate, citation_accuracy=citation_accuracy, n_scored_citation=1),
-        gate=Gate(threshold=GateThreshold(success=0.9, citation_accuracy=0.95), verdict=verdict),  # type: ignore[arg-type]
+        gate=Gate(threshold=GateThreshold(success=0.9, citation_accuracy=0.95), verdict=verdict),
         recipe_hash=recipe_hash,
     )
 
@@ -133,8 +133,8 @@ class FakeConn:
 
         if q.startswith("SELECT COALESCE(MAX(version), 0) FROM wb.recipes"):
             agent_id, tenant_id = p
-            matches = [r.version for r in self.recipes if r.agent_id == agent_id and r.tenant_id == tenant_id]
-            return FakeCursor([(max(matches, default=0),)])
+            versions = [r.version for r in self.recipes if r.agent_id == agent_id and r.tenant_id == tenant_id]
+            return FakeCursor([(max(versions, default=0),)])
 
         if q.startswith("UPDATE wb.recipes SET status = 'draft'"):
             agent_id, tenant_id = p
@@ -162,8 +162,8 @@ class FakeConn:
             candidates = [
                 v for v in self.versions if v.agent_id == agent_id and v.tenant_id == tenant_id and v.version == version
             ]
-            matches = sorted(candidates, key=lambda v: v.created_at, reverse=True)
-            return FakeCursor([(matches[0].recipe,)] if matches else [])
+            history_matches = sorted(candidates, key=lambda v: v.created_at, reverse=True)
+            return FakeCursor([(history_matches[0].recipe,)] if history_matches else [])
 
         if q.startswith("UPDATE wb.recipes SET status = 'rolled_back'"):
             agent_id, tenant_id = p
@@ -174,10 +174,10 @@ class FakeConn:
 
         if q.startswith("SELECT id FROM wb.recipes"):
             agent_id, tenant_id, version = p
-            matches = [
+            id_matches = [
                 r for r in self.recipes if r.agent_id == agent_id and r.tenant_id == tenant_id and r.version == version
             ]
-            return FakeCursor([(matches[0].id,)] if matches else [])
+            return FakeCursor([(id_matches[0].id,)] if id_matches else [])
 
         if q.startswith("UPDATE wb.recipes SET status = 'published' WHERE id"):
             (row_id,) = p
@@ -193,8 +193,8 @@ class FakeConn:
                 for r in self.recipes
                 if r.agent_id == agent_id and r.tenant_id == tenant_id and r.status == "published"
             ]
-            matches = sorted(published, reverse=True)
-            return FakeCursor([(matches[0],)] if matches else [])
+            published_versions = sorted(published, reverse=True)
+            return FakeCursor([(published_versions[0],)] if published_versions else [])
 
         raise AssertionError(f"FakeConn: unrecognized query: {q!r}")
 
