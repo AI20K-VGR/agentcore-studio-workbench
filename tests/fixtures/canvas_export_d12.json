@@ -15,7 +15,10 @@
         "type": "kb-retrieve",
         "params": {
           "query": "Nhân viên xin nghỉ phép cần báo trước bao lâu?",
-          "top_k": 3
+          "top_k": 3,
+          "section_roles": [
+            "public"
+          ]
         }
       },
       {

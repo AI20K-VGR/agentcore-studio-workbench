@@ -42,10 +42,12 @@ def test_create_recipe_d4_contains_kb_binding() -> None:
     assert recipe.kb_binding is not None
     assert recipe.kb_binding.kb_id == "kb-callisto-v1"
     assert recipe.kb_binding.scope == "ankor/public"
-    # Check that node n1 has tenant_id and section_roles populated in params
+    # `tenant_id`/`section_roles` KHÔNG còn ở `node.params` (hardening #122) —
+    # `interpreter.run()` luôn ghi đè cả 2 từ `session_context` (D8/D17, #111), khai sẵn ở đây chỉ
+    # là dữ liệu chết, dễ gây hiểu lầm nó có tác dụng. Khoá sự VẮNG MẶT để chặn regression.
     n1 = recipe.dag.nodes[0]
-    assert n1.params.get("tenant_id") == ANKOR_ID
-    assert n1.params.get("section_roles") == ["public"]
+    assert "tenant_id" not in n1.params
+    assert "section_roles" not in n1.params
 
 
 class _NoOpTraceWriter:

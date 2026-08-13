@@ -53,11 +53,12 @@ def test_create_recipe_d6_with_pure_dynamic_inputs() -> None:
     assert recipe.kb_binding.kb_id == "kb-hr-policy-v2"
     assert recipe.kb_binding.scope == "borea/hr"
 
-    # Check node n1 (KB_RETRIEVE) params
+    # Check node n1 (KB_RETRIEVE) params — `tenant_id`/`section_roles` KHÔNG còn ở đây (hardening
+    # #122): `interpreter.run()` luôn ghi đè cả 2 từ `session_context` (D8/D17, #111).
     n1 = recipe.dag.nodes[0]
     assert n1.params.get("query") == "Số ngày nghỉ phép của nhân viên chính thức?"
-    assert n1.params.get("tenant_id") == BOREA_ID
-    assert n1.params.get("section_roles") == ["hr"]
+    assert "tenant_id" not in n1.params
+    assert "section_roles" not in n1.params
 
     # Check node n2 (LLM_STEP) params
     n2 = recipe.dag.nodes[1]
@@ -69,7 +70,13 @@ def test_create_recipe_d6_with_pure_dynamic_inputs() -> None:
 
 
 def test_recipe_d6_scope_parsing_multi_roles() -> None:
-    """Test 2: Verify scope parsing extracts multi-roles correctly (e.g. "ankor/public, hr, finance")."""
+    """Test 2: Verify scope parsing extracts multi-roles correctly (e.g. "ankor/public, hr, finance").
+
+    Test trực tiếp `_parse_kb_scope()` — không còn qua `node.params` (hardening #122): giá trị đó
+    không còn được ghi vào node nữa, nhưng `_parse_kb_scope` vẫn phải parse đúng cấu trúc (dùng để
+    validate lúc build, xem docstring hàm)."""
+    assert _parse_kb_scope("ankor/public, hr, finance", ANKOR_ID) == ["public", "hr", "finance"]
+
     recipe = create_recipe_d6(
         agent_id="agent-multi-role",
         tenant_id=ANKOR_ID,
@@ -80,9 +87,7 @@ def test_recipe_d6_scope_parsing_multi_roles() -> None:
         scope="ankor/public, hr, finance",
         query="Quy trình thanh toán công tác phí?",
     )
-
-    n1 = recipe.dag.nodes[0]
-    assert n1.params.get("section_roles") == ["public", "hr", "finance"]
+    assert recipe.kb_binding.scope == "ankor/public, hr, finance"
 
 
 def test_recipe_d6_allows_scope_tenant_slug_disagreement() -> None:
@@ -92,6 +97,9 @@ def test_recipe_d6_allows_scope_tenant_slug_disagreement() -> None:
     khai) lệch scope, và apps/studio's eval-harness dùng slug placeholder "t" bất kể tenant_id
     thật hay tổng hợp. Chặn ở recipe-build-time là sai chỗ; INV-1 (session luôn thắng recipe tự
     khai) được enforce ở tenant_wall.py, không phải ở đây."""
+    # Slug lệch tenant_id — `_parse_kb_scope` vẫn parse ra roles bình thường, không raise.
+    assert _parse_kb_scope("borea/hr", ANKOR_ID) == ["hr"]
+
     recipe = create_recipe_d6(
         agent_id="agent-mismatch",
         tenant_id=ANKOR_ID,
@@ -102,9 +110,8 @@ def test_recipe_d6_allows_scope_tenant_slug_disagreement() -> None:
         scope="borea/hr",  # slug lệch tenant_id=ANKOR_ID — được phép, xem docstring
         query="x",
     )
-    n1 = recipe.dag.nodes[0]
-    assert n1.params.get("tenant_id") == ANKOR_ID
-    assert n1.params.get("section_roles") == ["hr"]
+    assert recipe.tenant_id == ANKOR_ID
+    assert recipe.kb_binding.scope == "borea/hr"
 
 
 def test_unhardcoded_tool_whitelist_selection() -> None:
@@ -274,6 +281,8 @@ def test_parse_kb_scope_allows_slug_tenant_disagreement_on_two_real_tenants() ->
 def test_create_recipe_d6_allows_typo_slug() -> None:
     """create_recipe_d6 KHÔNG còn raise trên slug lạ/typo ('boera') — bỏ ở
     kit#92/workbench#17 cùng lý do với test_recipe_d6_allows_scope_tenant_slug_disagreement."""
+    assert _parse_kb_scope("boera/hr", BOREA_ID) == ["hr"]
+
     recipe = create_recipe_d6(
         agent_id="agent-bad-scope",
         tenant_id=BOREA_ID,
@@ -284,8 +293,7 @@ def test_create_recipe_d6_allows_typo_slug() -> None:
         scope="boera/hr",  # typo: 'boera' thay vì 'borea' — được phép, xem docstring _parse_kb_scope
         query="test query",
     )
-    n1 = recipe.dag.nodes[0]
-    assert n1.params.get("section_roles") == ["hr"]
+    assert recipe.kb_binding.scope == "boera/hr"
 
 
 def test_create_recipe_d6_rejects_empty_roles() -> None:

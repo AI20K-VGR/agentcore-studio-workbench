@@ -204,7 +204,11 @@ def create_recipe_d4(
         scope=scope,
     )
 
-    section_roles = _parse_kb_scope(scope, t_id)
+    # `_parse_kb_scope` chỉ validate CẤU TRÚC của `scope` (bắt lỗi gõ sai sớm lúc build) — giá trị
+    # trả về không còn cần đưa vào `node.params` nữa: `interpreter.run()` luôn ghi đè
+    # `tenant_id`/`section_roles` của node `kb-retrieve` bằng `session_context` (D8/D17, #111),
+    # nên bất kỳ giá trị nào khai ở đây đều bị bỏ qua tại thời điểm chạy thật.
+    _parse_kb_scope(scope, t_id)
 
     nodes = [
         Node(
@@ -212,8 +216,6 @@ def create_recipe_d4(
             type=NodeType.KB_RETRIEVE,
             params={
                 "query": query,
-                "tenant_id": t_id,
-                "section_roles": section_roles,
                 "top_k": 3,
             },
         ),
@@ -275,7 +277,11 @@ def create_recipe_d6(
         scope=scope,
     )
 
-    section_roles = _parse_kb_scope(scope, t_id)
+    # `_parse_kb_scope` chỉ validate CẤU TRÚC của `scope` (bắt lỗi gõ sai sớm lúc build) — giá trị
+    # trả về không còn cần đưa vào `node.params` nữa: `interpreter.run()` luôn ghi đè
+    # `tenant_id`/`section_roles` của node `kb-retrieve` bằng `session_context` (D8/D17, #111),
+    # nên bất kỳ giá trị nào khai ở đây đều bị bỏ qua tại thời điểm chạy thật.
+    _parse_kb_scope(scope, t_id)
 
     nodes = [
         Node(
@@ -283,8 +289,6 @@ def create_recipe_d6(
             type=NodeType.KB_RETRIEVE,
             params={
                 "query": query,
-                "tenant_id": t_id,
-                "section_roles": section_roles,
                 "top_k": 3,
             },
         ),
