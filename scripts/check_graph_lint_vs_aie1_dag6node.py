@@ -22,9 +22,7 @@ from studio_contracts import Recipe
 
 from studio_workbench.validator import graph_lint
 
-_ENGINE_SCRIPT = (
-    Path(__file__).resolve().parents[2] / "engine" / "scripts" / "run_spine_dag_6node.py"
-)
+_ENGINE_SCRIPT = Path(__file__).resolve().parents[2] / "engine" / "scripts" / "run_spine_dag_6node.py"
 
 
 def _load_build_six_node_recipe() -> Callable[[], Recipe]:
