@@ -25,6 +25,13 @@ Theo issue [kit#127](https://github.com/AI20K-VGR/agentcore-studio-kit/issues/12
    `tool-call`, `hitl-pause`, `end`). AIE-1 đã chủ động xin review shape-compatibility ở PR#25 —
    đây là điều kiện tiên quyết cho hạng mục "6 node-type" trong DoD.
 
+   Đo bằng `scripts/check_graph_lint_vs_aie1_dag6node.py` (chạy tay, không nằm trong `testpaths`,
+   không có job CI nào gọi nó — **ảnh chụp MỘT LẦN tại thời điểm chạy**, không phải thứ được canh
+   liên tục qua mọi commit sau này của engine hay workbench. Nếu `graph_lint()` hoặc DAG mẫu của
+   AIE-1 đổi sau ngày đo, kết quả này không tự cập nhật — cần chạy lại tay để biết còn đúng hay
+   không. Ghi rõ ở đây theo góp ý review PR#23 (AIE-2), để lượt sau không ai tưởng nhầm đây là một
+   cổng CI đang canh gác).
+
 2. **Demo spine 4 bước chạy thật** — dùng `apps/studio/scripts/e2e_smoke_eval.py` (đã tồn tại từ
    trước, tự chứng minh 4 quadrant ghép qua Postgres thật: `workbench.create_recipe_d4 →
    engine.interpreter.run → kb.PgKbSearch → evalhub.score_case`) làm bằng chứng chính, thay vì chờ
