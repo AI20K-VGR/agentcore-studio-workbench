@@ -28,6 +28,37 @@
    `'published'` under concurrent publishes (partial unique index / advisory lock) is Q4 in the
    guide's register — an open, unresolved question, out of scope for this implementation.
 
+`recipe_hash(recipe)` (DEC-03, tracked `agentcore-studio-evalhub/docs/decisions/scorecard.md` —
+overdue since D12, closed here) is the missing producer `Scorecard.recipe_hash` needed all along:
+`studio_evalhub.compute.compute_scorecard`/`EvalHarness.run` have carried an OPTIONAL
+`recipe_hash: str | None = None` kwarg since D20 (`DEC-D20-02`) and thread it straight through —
+but no caller on the real path ever COMPUTED a value, so every real `Scorecard` shipped with
+`recipe_hash=None` and `publish()`'s own fail-closed rule (line ~72 below) refused every single
+call. Lives here, not in `studio_evalhub`, for two independent reasons: (1) `test_src_khong_tu_dan_
+xuat_recipe_hash` (evalhub, AST-guard) forbids `hashlib`/`model_dump_json()` inside
+`src/studio_evalhub/` outright — evalhub may only RECEIVE a hash, never derive one (`DEC-D20-02`);
+(2) `Recipe`'s canonical byte-form is inherently a `studio_contracts`/`studio_workbench` question
+(this package already owns every other `Recipe`-shape operation — `builder.py`, `canvas.py`), not
+an eval-harness one.
+
+**Canonical form: `sha256(recipe.model_dump_json(by_alias=True))`.** `by_alias=True` is not
+decorative — `Edge.from_` carries `Field(alias="from")` (`recipe.py` F12), so
+`model_dump_json()` (no alias) and `model_dump_json(by_alias=True)` serialize the SAME recipe to
+TWO DIFFERENT byte strings, which would make the hash depend on which serializer flag the caller
+happened to use rather than on the recipe's content — always forcing `by_alias=True` here is what
+makes the hash a function of the recipe alone. Pydantic v2 serializes `BaseModel` fields in
+declared-field order (not sorted), so two `Recipe` objects built from equal data always dump to
+byte-identical JSON — no manual key-sorting needed for determinism within one contract version.
+
+**Known, accepted limitation, stated rather than hidden (same posture as `DEC-D20-02`'s own
+docstring on this exact point):** this hash is a WRITE-time value only — computed once at publish
+time and stored verbatim in `Scorecard.recipe_hash`/`wb.recipes`, never recomputed to verify an
+older row later. If `Recipe` ever gains a new field, hashes computed under the new schema will
+differ from hashes computed under the old one for what a human would call "the same recipe" — this
+is only a problem for a FUTURE re-verify-by-recomputing feature, which does not exist today; it is
+not a problem for the current publish/gate pipeline, which only ever compares a hash to itself
+within a single call (`compute_scorecard` → `publish`), never recomputes one from stored JSON.
+
 `conn: DbConnection` (kit#117, Q5; `protocols.py` in this same package — deliberately NOT
 promoted to `studio_contracts`, see that module's docstring for why) is a single connection the
 CALLER already bound to the request's tenant (`SET LOCAL app.tenant_id`, e.g. via `apps/studio`'s
@@ -52,12 +83,22 @@ predicates AND the policy must independently hold).
 
 from __future__ import annotations
 
+import hashlib
 from uuid import UUID
 
 from studio_contracts import Recipe, Scorecard
 
 from studio_workbench.protocols import DbConnection
 from studio_workbench.validator import graph_lint
+
+
+def recipe_hash(recipe: Recipe) -> str:
+    """Producer for `Scorecard.recipe_hash` (DEC-03) — `sha256(recipe.model_dump_json(by_alias=
+    True)).hexdigest()`. See module docstring for why `by_alias=True` is mandatory and why this
+    lives here rather than in `studio_evalhub`. Pure/deterministic: same recipe content always
+    yields the same hash, no I/O, no randomness — safe to call as many times as needed."""
+    canonical = recipe.model_dump_json(by_alias=True)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 async def publish(recipe: Recipe, scorecard: Scorecard, conn: DbConnection) -> None:
@@ -97,11 +138,11 @@ async def publish(recipe: Recipe, scorecard: Scorecard, conn: DbConnection) -> N
     recipe_json = recipe.model_dump_json()
     cursor = await conn.execute(
         """
-        INSERT INTO wb.recipes (agent_id, tenant_id, recipe, version, status)
-        VALUES (%s, %s, %s::jsonb, %s, 'published')
+        INSERT INTO wb.recipes (agent_id, tenant_id, recipe, version, status, recipe_hash)
+        VALUES (%s, %s, %s::jsonb, %s, 'published', %s)
         RETURNING id
         """,
-        (recipe.agent_id, recipe.tenant_id, recipe_json, next_version),
+        (recipe.agent_id, recipe.tenant_id, recipe_json, next_version, scorecard.recipe_hash),
     )
     inserted = await cursor.fetchone()
     if inserted is None:
@@ -112,10 +153,10 @@ async def publish(recipe: Recipe, scorecard: Scorecard, conn: DbConnection) -> N
 
     await conn.execute(
         """
-        INSERT INTO wb.recipe_versions (recipe_id, agent_id, tenant_id, recipe, version, status)
-        VALUES (%s, %s, %s, %s::jsonb, %s, 'published')
+        INSERT INTO wb.recipe_versions (recipe_id, agent_id, tenant_id, recipe, version, status, recipe_hash)
+        VALUES (%s, %s, %s, %s::jsonb, %s, 'published', %s)
         """,
-        (recipe_row_id, recipe.agent_id, recipe.tenant_id, recipe_json, next_version),
+        (recipe_row_id, recipe.agent_id, recipe.tenant_id, recipe_json, next_version, scorecard.recipe_hash),
     )
 
 
@@ -126,7 +167,7 @@ async def rollback(agent_id: str, tenant_id: UUID, *, to_version: int, conn: DbC
     """
     cursor = await conn.execute(
         """
-        SELECT recipe FROM wb.recipe_versions
+        SELECT recipe, recipe_hash FROM wb.recipe_versions
         WHERE agent_id = %s AND tenant_id = %s AND version = %s
         ORDER BY created_at DESC
         LIMIT 1
@@ -138,7 +179,7 @@ async def rollback(agent_id: str, tenant_id: UUID, *, to_version: int, conn: DbC
         raise ValueError(
             f"rollback: no wb.recipe_versions row for agent_id={agent_id!r} tenant_id={tenant_id} version={to_version}"
         )
-    recipe_json = history_row[0]
+    recipe_json, history_recipe_hash = history_row
 
     await conn.execute(
         "UPDATE wb.recipes SET status = 'rolled_back' WHERE agent_id = %s AND tenant_id = %s AND status = 'published'",
@@ -155,12 +196,15 @@ async def rollback(agent_id: str, tenant_id: UUID, *, to_version: int, conn: DbC
     else:
         # The target version's own wb.recipes row is gone (or never existed independently of
         # history) — recreate it from wb.recipe_versions so the endpoint has something live.
+        # `history_recipe_hash` carries forward unchanged — this is the SAME recipe content being
+        # re-asserted, not a new one, so the hash that already certified it is still correct; a
+        # `NULL` here would silently make a legitimately-hashed recipe look unverified again.
         await conn.execute(
             """
-            INSERT INTO wb.recipes (agent_id, tenant_id, recipe, version, status)
-            VALUES (%s, %s, %s::jsonb, %s, 'published')
+            INSERT INTO wb.recipes (agent_id, tenant_id, recipe, version, status, recipe_hash)
+            VALUES (%s, %s, %s::jsonb, %s, 'published', %s)
             """,
-            (agent_id, tenant_id, recipe_json, to_version),
+            (agent_id, tenant_id, recipe_json, to_version, history_recipe_hash),
         )
 
 

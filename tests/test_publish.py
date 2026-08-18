@@ -13,6 +13,7 @@ same as every other DB test in this workspace.
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -35,7 +36,7 @@ from studio_contracts import (
     ScorecardThreshold,
 )
 
-from studio_workbench.publish import publish, rollback
+from studio_workbench.publish import publish, recipe_hash, rollback
 
 ANKOR_ID = UUID("a0000000-0000-0000-0000-000000000001")
 BOREA_ID = UUID("b0000000-0000-0000-0000-000000000001")
@@ -102,6 +103,7 @@ class _Row:
     version: int
     status: str
     created_at: int
+    recipe_hash: str | None = None
 
 
 @dataclass
@@ -144,26 +146,30 @@ class FakeConn:
             return FakeCursor()
 
         if q.startswith("INSERT INTO wb.recipes"):
-            agent_id, tenant_id, recipe_json, version = p
+            agent_id, tenant_id, recipe_json, version, recipe_hash = p
             self._clock += 1
-            row = _Row(self._next_id, agent_id, tenant_id, recipe_json, version, "published", self._clock)
+            row = _Row(self._next_id, agent_id, tenant_id, recipe_json, version, "published", self._clock, recipe_hash)
             self.recipes.append(row)
             self._next_id += 1
             return FakeCursor([(row.id,)])
 
         if q.startswith("INSERT INTO wb.recipe_versions"):
-            recipe_id, agent_id, tenant_id, recipe_json, version = p
+            recipe_id, agent_id, tenant_id, recipe_json, version, recipe_hash = p
             self._clock += 1
-            self.versions.append(_Row(recipe_id, agent_id, tenant_id, recipe_json, version, "published", self._clock))
+            self.versions.append(
+                _Row(recipe_id, agent_id, tenant_id, recipe_json, version, "published", self._clock, recipe_hash)
+            )
             return FakeCursor()
 
-        if q.startswith("SELECT recipe FROM wb.recipe_versions"):
+        if q.startswith("SELECT recipe, recipe_hash FROM wb.recipe_versions"):
             agent_id, tenant_id, version = p
             candidates = [
                 v for v in self.versions if v.agent_id == agent_id and v.tenant_id == tenant_id and v.version == version
             ]
             history_matches = sorted(candidates, key=lambda v: v.created_at, reverse=True)
-            return FakeCursor([(history_matches[0].recipe,)] if history_matches else [])
+            return FakeCursor(
+                [(history_matches[0].recipe, history_matches[0].recipe_hash)] if history_matches else []
+            )
 
         if q.startswith("UPDATE wb.recipes SET status = 'rolled_back'"):
             agent_id, tenant_id = p
@@ -197,6 +203,51 @@ class FakeConn:
             return FakeCursor([(published_versions[0],)] if published_versions else [])
 
         raise AssertionError(f"FakeConn: unrecognized query: {q!r}")
+
+
+# ---------------------------------------------------------------------------
+# `recipe_hash` — DEC-03 producer
+
+
+def test_recipe_hash_is_deterministic_for_equal_content() -> None:
+    """Hai `Recipe` object dựng độc lập từ CÙNG dữ liệu phải ra CÙNG hash — nền tảng của mọi thứ
+    khác trong file này: nếu tính chất này sai, `recipe_hash` vô dụng ngay từ định nghĩa."""
+    assert recipe_hash(_valid_recipe()) == recipe_hash(_valid_recipe())
+
+
+def test_recipe_hash_changes_when_content_changes() -> None:
+    """Đối chứng bài trên — đổi 1 field bất kỳ (ở đây: `instructions`) phải đổi hash. Không đổi
+    thì hash không đo được gì, cùng lớp lỗi `M-G` mutation-kill mà evalhub đã pin cho `compute.py`."""
+    base = _valid_recipe()
+    changed = base.model_copy(
+        update={"agent_config": base.agent_config.model_copy(update={"instructions": "khác hẳn."})}
+    )
+    assert recipe_hash(base) != recipe_hash(changed)
+
+
+def test_recipe_hash_is_alias_invariant() -> None:
+    """KHÓA đúng lý do `by_alias=True` là bắt buộc, nêu ở docstring module: `Edge.from_` mang
+    `Field(alias="from")`, nên `model_dump_json()` (không alias) và `model_dump_json(by_alias=
+    True)` ra HAI chuỗi byte khác nhau cho CÙNG một recipe. Test này tự lấy `model_dump_json()`
+    KHÔNG alias làm oracle độc lập với hàm đang test, để không vô tình chỉ so `recipe_hash` với
+    chính nó."""
+    recipe = _valid_recipe()
+    no_alias_hash = hashlib.sha256(recipe.model_dump_json().encode("utf-8")).hexdigest()
+    assert recipe_hash(recipe) != no_alias_hash
+
+
+async def test_publish_succeeds_end_to_end_with_real_recipe_hash() -> None:
+    """Đối chứng cuối — thay vì fake string `"h1"` như mọi test khác trong file này, dùng ĐÚNG
+    `recipe_hash()` sản xuất thật, gọi `publish()` cho MỘT recipe. Trước bản vá DEC-03 này, đường
+    thật (`apps/studio/routes/publish.py` → `EvalHarness.run()`) không có cách nào tạo ra giá trị
+    khác `None`, nên `publish()` LUÔN 409 bất kể `gate.verdict` — bài này khoá lại rằng với hash
+    thật, đường publish giờ đi qua được, không còn refuse vô điều kiện."""
+    conn = FakeConn()
+    recipe = _valid_recipe()
+    await publish(recipe, _scorecard(verdict="PASS", recipe_hash=recipe_hash(recipe)), conn)
+
+    assert len(conn.recipes) == 1
+    assert conn.recipes[0].status == "published"
 
 
 # ---------------------------------------------------------------------------
@@ -235,6 +286,33 @@ async def test_publish_writes_new_version_on_pass() -> None:
     assert conn.recipes[0].status == "published"
     assert len(conn.versions) == 1
     assert conn.versions[0].version == 1
+
+
+async def test_publish_stores_recipe_hash_on_both_tables() -> None:
+    """KHÓA: `scorecard.recipe_hash` được LƯU LẠI trên cả `wb.recipes` lẫn `wb.recipe_versions`,
+    không chỉ dùng làm điều kiện gate rồi bỏ đi — nếu không, không có cách nào sau này trả lời
+    "hàng đã publish này khớp hash nào" mà không tính lại từ đầu."""
+    conn = FakeConn()
+    await publish(_valid_recipe(), _scorecard(verdict="PASS", recipe_hash="h1"), conn)
+
+    assert conn.recipes[0].recipe_hash == "h1"
+    assert conn.versions[0].recipe_hash == "h1"
+
+
+async def test_rollback_recreated_row_carries_forward_recipe_hash() -> None:
+    """KHÓA: khi `rollback()` phải TỰ DỰNG LẠI hàng `wb.recipes` (đường "row đã mất" — xem nhánh
+    `else` trong `rollback()`), nó phải mang theo ĐÚNG `recipe_hash` đã lưu trong lịch sử
+    `wb.recipe_versions`, không được để `NULL` — đây là recipe CŨ được TÁI XÁC NHẬN, không phải
+    recipe mới chưa qua gate."""
+    conn = FakeConn()
+    recipe = _valid_recipe()
+    await publish(recipe, _scorecard(verdict="PASS", recipe_hash="h1"), conn)
+    conn.recipes.clear()  # mô phỏng hàng wb.recipes gốc đã mất — chỉ còn lịch sử wb.recipe_versions
+
+    await rollback(recipe.agent_id, recipe.tenant_id, to_version=1, conn=conn)
+
+    assert len(conn.recipes) == 1
+    assert conn.recipes[0].recipe_hash == "h1"
 
 
 async def test_publish_second_pass_bumps_version_and_demotes_prior() -> None:
