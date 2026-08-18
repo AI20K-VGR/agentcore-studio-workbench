@@ -37,7 +37,7 @@ flowchart TB
         AD1["CRUD /api/admin/users<br/>tạo/sửa role/vô hiệu hoá nhân viên"]
         AD2["GET /api/admin/sections<br/>chỉ đọc, đúng tenant mình"]
         AD3["Canvas: build · test · publish · rollback agent"]
-        AD4["as_roles — giả lập chat theo role hẹp hơn<br/>chỉ THU HẸP, không CẤP THÊM"]
+        AD4["as_roles — giả lập chat theo role hẹp hơn<br/>chỉ THU HẸP, không CẤP THÊM<br/><i>(CHƯA merge — apps/studio#21)</i>"]
     end
 
     subgraph EMP["Employee"]
@@ -48,14 +48,22 @@ flowchart TB
     AD -. "tạo tài khoản nhân viên" .-> EMP
 ```
 
+**Sửa lại đợt review `workbench#26` (@TranBaDat2607) — 2 dòng dưới đây SAI khi bài này viết**: cả
+hai trích từ working tree cục bộ lúc đó đã có sẵn nhánh `apps/studio#21` (RBAC sections/agents,
+CHƯA merge vào `apps/studio` main) mà không ghi rõ — đọc như đang mô tả `main` hiện tại trong khi
+thực ra mô tả 1 PR đang mở. `as_roles` grep case-insensitive trên TOÀN BỘ 9 submodule ra **0 hit**
+ngoài nhánh đó; `routes/auth.py` trên `main` chỉ dài 165 dòng và `login()` không hề có đoạn mở
+rộng role theo section — hàng "Admin tự động thừa hưởng…" đã bị XOÁ khỏi bảng dưới, thay bằng đúng
+cơ chế đang sống thật trên `main`.
+
 | Chi tiết | File:line |
 |---|---|
 | JWT claims (`tenant_id`/`user`/`roles`) | `apps/studio/src/studio_app/jwt_auth.py:99-132` |
-| Admin **tự động thừa hưởng toàn bộ** section-role của tenant lúc login (không phải tự chọn) | `apps/studio/src/studio_app/routes/auth.py:163-178` |
+| Admin nhận **đúng 1 lần**, lúc superadmin tạo công ty — KHÔNG phải mỗi lần login: `admin_roles = ["admin", *sorted(SECTION_VOCAB)]`, ghi cứng vào `core.users.roles` ngay lúc tạo | `apps/studio/src/studio_app/routes/admin.py:148` (trên `main`) |
 | `SECTION_VOCAB` — vocabulary đóng cho section-role | `packages/kb/src/studio_kb/doc_factory.py:30` → `frozenset({"public", "hr", "finance", "engineering"})` |
 | Superadmin companies/sections CRUD | `apps/studio/src/studio_app/routes/admin.py`, `routes/sections.py` |
-| Admin employees CRUD + roles validate `core.sections ∪ {"admin"}` | `routes/admin.py` (viết lại D21) |
-| `as_roles` chỉ được thu hẹp, không cấp thêm quyền | `apps/studio/src/studio_app/routes/chat.py:99-116` |
+| Admin employees CRUD + roles validate `core.sections ∪ {"admin"}` (thay `SECTION_VOCAB` tĩnh) | `routes/admin.py` — **CHƯA merge**, nhánh `apps/studio#21` |
+| `as_roles` chỉ được thu hẹp, không cấp thêm quyền — mô phỏng chat theo role hẹp hơn cho admin tự kiểm | `apps/studio/src/studio_app/routes/chat.py` — **CHƯA merge**, nhánh `apps/studio#21` |
 
 ## 2. Flow diagram — 8 bước spine (`login → ingest → build recipe → run → trace → eval → gate/publish → chat`)
 
