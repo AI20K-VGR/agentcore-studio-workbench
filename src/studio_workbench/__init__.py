@@ -16,7 +16,8 @@ from studio_workbench.builder import (
     create_recipe_d6,
 )
 from studio_workbench.canvas import recipe_from_canvas
-from studio_workbench.publish import publish, rollback
+from studio_workbench.publish import publish, recipe_hash, rollback
+from studio_workbench.recipe_ops import with_query, without_query
 from studio_workbench.validator import graph_lint
 
 __all__ = [
@@ -29,5 +30,8 @@ __all__ = [
     "graph_lint",
     "publish",
     "recipe_from_canvas",
+    "recipe_hash",
     "rollback",
+    "with_query",
+    "without_query",
 ]

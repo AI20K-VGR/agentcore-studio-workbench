@@ -8,7 +8,17 @@ plan.md "Dependency matrix & file-ownership").
 `wb.recipes` — one row per (agent_id, tenant_id, version): the recipe (R-SPEC A1#1) as stored JSONB
 (the wire shape workbench validates through `studio_contracts.Recipe`, never a workbench-local
 type) + a `status` lifecycle column (`draft`/`published`/`rolled_back`, spec-only for now — the
-concrete state machine lands with `publish.py`'s real implementation).
+concrete state machine lands with `publish.py`'s real implementation) + `recipe_hash` (DEC-03,
+`publish.recipe_hash()`) — the SAME value `Scorecard.recipe_hash` carried at publish time, stored
+alongside the `recipe` JSONB it was computed from. **Not** byte-identical to what was hashed,
+though: `recipe` here is `Recipe.model_dump_json()` (no alias), while `recipe_hash()` hashes
+`model_dump(mode="json", by_alias=True)` with sorted keys (see `publish.py`'s module docstring) —
+verifying a row means recomputing `publish.recipe_hash(Recipe.model_validate(row["recipe"]))` from
+the reconstructed object (safe: `Edge.populate_by_name=True` accepts both the aliased and
+unaliased key on input), never a raw byte/string comparison against the stored JSONB directly.
+`NULL` for any row published before this column existed. `eval.scorecards` (a DIFFERENT quadrant,
+`packages/evalhub`) has no writer yet and no `recipe_hash` column of its own — tracked as
+`agentcore-studio-evalhub#28`, out of scope here.
 
 D11 fix: `tenant` was `TEXT` (pre-D-13 slug), now `tenant_id UUID` to match
 `studio_contracts.recipe.Recipe.tenant_id` — the contract this table stores rows FOR already
@@ -46,6 +56,7 @@ CREATE TABLE IF NOT EXISTS wb.recipes (
     recipe JSONB NOT NULL,
     version INT NOT NULL DEFAULT 1,
     status TEXT NOT NULL DEFAULT 'draft',
+    recipe_hash TEXT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (agent_id, tenant_id, version)
 );
@@ -58,8 +69,17 @@ CREATE TABLE IF NOT EXISTS wb.recipe_versions (
     recipe JSONB NOT NULL,
     version INT NOT NULL,
     status TEXT NOT NULL,
+    recipe_hash TEXT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Đường thứ hai cho DB đã tồn tại từ trước cột này (cùng khuôn `is_active`/`password_changed_at`
+-- ở `apps/studio/core/schema.py`) — `CREATE TABLE IF NOT EXISTS` ở trên là no-op trên bảng đã có.
+-- `NULL` (không `NOT NULL`) — khớp đúng kiểu Python `Scorecard.recipe_hash: str | None`
+-- (`studio_contracts.scorecard`), và giữ migration này an toàn vô điều kiện trên bảng đã có row,
+-- không cần hỏi "row cũ nhận giá trị gì" như khuôn `NOT NULL` các cột khác trong file này đã đặt ra.
+ALTER TABLE wb.recipes ADD COLUMN IF NOT EXISTS recipe_hash TEXT NULL;
+ALTER TABLE wb.recipe_versions ADD COLUMN IF NOT EXISTS recipe_hash TEXT NULL;
 
 ALTER TABLE wb.recipes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE wb.recipes FORCE ROW LEVEL SECURITY;
