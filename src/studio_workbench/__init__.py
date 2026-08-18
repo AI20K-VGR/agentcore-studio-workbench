@@ -12,10 +12,8 @@ from studio_workbench.builder import (
     BOREA_ID,
     build_agent_config,
     create_dynamic_recipe,
-    create_recipe_d3,
     create_recipe_d4,
     create_recipe_d6,
-    create_sample_recipe_d3,
 )
 from studio_workbench.canvas import recipe_from_canvas
 from studio_workbench.publish import publish, rollback
@@ -26,10 +24,8 @@ __all__ = [
     "BOREA_ID",
     "build_agent_config",
     "create_dynamic_recipe",
-    "create_recipe_d3",
     "create_recipe_d4",
     "create_recipe_d6",
-    "create_sample_recipe_d3",
     "graph_lint",
     "publish",
     "recipe_from_canvas",

@@ -14,7 +14,6 @@ from studio_workbench import (
     ANKOR_ID,
     build_agent_config,
     create_dynamic_recipe,
-    create_recipe_d3,
     create_recipe_d4,
     create_recipe_d6,
 )
@@ -134,11 +133,11 @@ def test_create_dynamic_recipe_3_nodes_with_kb() -> None:
 
 
 def test_legacy_builders_compatibility() -> None:
-    """Test that create_recipe_d3, d4, d6 work properly from unified builder."""
-    r3 = create_recipe_d3()
-    assert r3.agent_id == "agent_demo_d3"
-    assert len(r3.dag.nodes) == 4
+    """Test that create_recipe_d4, d6 work properly from unified builder.
 
+    `create_recipe_d3`/`create_sample_recipe_d3` removed (day21 cleanup) — 0 caller ngoài
+    `packages/workbench` (đã kiểm kê toàn repo), hành vi là tập con thật sự của `create_recipe_d4`.
+    """
     r4 = create_recipe_d4(agent_id="d4-agent")
     assert r4.agent_id == "d4-agent"
     assert len(r4.dag.nodes) == 4
