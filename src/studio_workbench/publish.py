@@ -7,10 +7,16 @@
    too, not only the interpreter). `ValueError` propagates unchanged.
 2. `scorecard.recipe_hash is None` fail-closed (kit#117): `Scorecard.recipe_hash`'s own docstring
    requires treating "cannot verify which recipe this certifies" as REFUSE, never "probably
-   fine". Every real `Scorecard` carries `recipe_hash=None` until AIE-2 wires a producer
-   (`DEC-03`) — until then `publish()` always refuses here, which is the correct, documented
+   fine". Every real `Scorecard` carried `recipe_hash=None` before AIE-2 wired a producer
+   (`DEC-03`) — before then `publish()` always refused here, which was the correct, documented
    behavior, not a bug.
-3. `scorecard.gate.verdict` (`studio_contracts.Scorecard`, owned/rendered by AIE-2) —
+3. `scorecard.recipe_hash != recipe_hash(recipe)` fail-closed — a non-`None` hash is not
+   automatically trusted either: it must match `recipe_hash()` recomputed from the `Recipe` this
+   very call is about to publish, or `publish()` refuses. Without this, a caller could hand
+   `publish()` a DIFFERENT recipe than the one a `PASS`-verdict `scorecard.recipe_hash` actually
+   certifies, and the mismatch would go through silently — exactly the "recipe and scorecard drift
+   apart silently" failure mode `Scorecard.recipe_hash`'s own docstring exists to prevent.
+4. `scorecard.gate.verdict` (`studio_contracts.Scorecard`, owned/rendered by AIE-2) —
    `verdict == "FAIL"` is a HARD gate (INV-6), never advisory-only: Publish is blocked and the
    PREVIOUSLY published version is re-asserted live via `rollback()`. SWE only WIRES this gate —
    reading `gate.verdict` and branching on it — it does NOT own computing the Scorecard's
@@ -20,7 +26,7 @@
    a case was scored by the judge branch or the exact-match branch (kit#117's "không vỡ khi tụt
    nấc" is satisfied structurally: there is nothing here that COULD break on a tier fallback,
    because nothing here looks at which tier scored a case).
-4. On PASS: write the new version into `wb.recipes` + `wb.recipe_versions` (DDL in `schema.py`)
+5. On PASS: write the new version into `wb.recipes` + `wb.recipe_versions` (DDL in `schema.py`)
    and flip the "named endpoint" — no separate endpoint table exists anywhere in the 5 schemas
    (`docs/test-design/GUIDE-B-recipe.md` §4.5), so the convention here is: exactly one
    `wb.recipes` row per `(agent_id, tenant_id)` carries `status='published'` at a time; the
@@ -41,23 +47,37 @@ xuat_recipe_hash` (evalhub, AST-guard) forbids `hashlib`/`model_dump_json()` ins
 (this package already owns every other `Recipe`-shape operation — `builder.py`, `canvas.py`), not
 an eval-harness one.
 
-**Canonical form: `sha256(recipe.model_dump_json(by_alias=True))`.** `by_alias=True` is not
-decorative — `Edge.from_` carries `Field(alias="from")` (`recipe.py` F12), so
-`model_dump_json()` (no alias) and `model_dump_json(by_alias=True)` serialize the SAME recipe to
-TWO DIFFERENT byte strings, which would make the hash depend on which serializer flag the caller
-happened to use rather than on the recipe's content — always forcing `by_alias=True` here is what
-makes the hash a function of the recipe alone. Pydantic v2 serializes `BaseModel` fields in
-declared-field order (not sorted), so two `Recipe` objects built from equal data always dump to
-byte-identical JSON — no manual key-sorting needed for determinism within one contract version.
+**Canonical form: `sha256(json.dumps(recipe.model_dump(mode="json", by_alias=True), sort_keys=True,
+separators=(",", ":")))`.** `by_alias=True` is not decorative — `Edge.from_` carries
+`Field(alias="from")` (`recipe.py` F12), so a dump without alias and one with alias serialize the
+SAME recipe to TWO DIFFERENT byte strings, which would make the hash depend on which serializer
+flag the caller happened to use rather than on the recipe's content — always forcing
+`by_alias=True` here is what makes the hash a function of the recipe alone. `sort_keys=True` is
+NOT decorative either, despite `BaseModel` fields dumping in fixed declared-field order regardless
+of constructor-kwarg order: `Node.params: dict[str, object]` (`recipe.py`) is a free-form Python
+dict, not a `BaseModel`, and its JSON serialization preserves INSERTION order — two `Recipe`
+objects that are content-equal but whose `params` dicts were built with keys in a different order
+(e.g. `with_query`'s `{**params, "query": q}` appends at the end, while canvas/builder code may
+place it elsewhere) would otherwise hash differently for what is the same recipe. Sorting keys at
+hash time is what makes the hash a function of content alone, independent of `params` construction
+order — this also means re-deriving a hash from a `Recipe` reconstructed out of Postgres `jsonb`
+(which does not preserve key order either) still reproduces the original hash.
+
+`publish()` does NOT trust `scorecard.recipe_hash` blindly: it recomputes `recipe_hash(recipe)`
+fresh from the `Recipe` actually being published and requires an exact match (line ~133 below) —
+this is what turns "which recipe does this Scorecard certify" from a claim into something checked,
+catching a caller that accidentally (or maliciously) hands `publish()` a different recipe than the
+one that was scored.
 
 **Known, accepted limitation, stated rather than hidden (same posture as `DEC-D20-02`'s own
-docstring on this exact point):** this hash is a WRITE-time value only — computed once at publish
-time and stored verbatim in `Scorecard.recipe_hash`/`wb.recipes`, never recomputed to verify an
-older row later. If `Recipe` ever gains a new field, hashes computed under the new schema will
-differ from hashes computed under the old one for what a human would call "the same recipe" — this
-is only a problem for a FUTURE re-verify-by-recomputing feature, which does not exist today; it is
-not a problem for the current publish/gate pipeline, which only ever compares a hash to itself
-within a single call (`compute_scorecard` → `publish`), never recomputes one from stored JSON.
+docstring on this exact point):** the value stored in `wb.recipes`/`wb.recipe_versions` is a
+WRITE-time snapshot only — nothing here re-verifies an OLDER, already-stored row later (e.g. "does
+this row I'm reading back still match what I'd compute today"). If `Recipe` ever gains a new field,
+hashes computed under the new schema will differ from hashes computed under the old one for what a
+human would call "the same recipe" — this only affects such a FUTURE re-verify-an-old-row feature,
+which does not exist today; the publish-time equality check above is unaffected by it, since both
+sides of that comparison (`scorecard.recipe_hash` and `recipe_hash(recipe)`) are always computed
+under the SAME, current schema within the SAME call.
 
 `conn: DbConnection` (kit#117, Q5; `protocols.py` in this same package — deliberately NOT
 promoted to `studio_contracts`, see that module's docstring for why) is a single connection the
@@ -84,6 +104,7 @@ predicates AND the policy must independently hold).
 from __future__ import annotations
 
 import hashlib
+import json
 from uuid import UUID
 
 from studio_contracts import Recipe, Scorecard
@@ -93,11 +114,17 @@ from studio_workbench.validator import graph_lint
 
 
 def recipe_hash(recipe: Recipe) -> str:
-    """Producer for `Scorecard.recipe_hash` (DEC-03) — `sha256(recipe.model_dump_json(by_alias=
-    True)).hexdigest()`. See module docstring for why `by_alias=True` is mandatory and why this
-    lives here rather than in `studio_evalhub`. Pure/deterministic: same recipe content always
-    yields the same hash, no I/O, no randomness — safe to call as many times as needed."""
-    canonical = recipe.model_dump_json(by_alias=True)
+    """Producer for `Scorecard.recipe_hash` (DEC-03) — sha256 of a canonical JSON dump. See module
+    docstring for why `by_alias=True` AND `sort_keys=True` are both mandatory, and why this lives
+    here rather than in `studio_evalhub`. Pure/deterministic: same recipe content always yields the
+    same hash regardless of `params` dict construction order, no I/O, no randomness — safe to call
+    as many times as needed."""
+    canonical = json.dumps(
+        recipe.model_dump(mode="json", by_alias=True),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -113,7 +140,13 @@ async def publish(recipe: Recipe, scorecard: Scorecard, conn: DbConnection) -> N
     if scorecard.recipe_hash is None:
         raise ValueError(
             f"publish: scorecard.recipe_hash is None for agent_id={recipe.agent_id!r} — cannot "
-            "verify which recipe this Scorecard certifies (DEC-03 has no producer yet); refusing"
+            "verify which recipe this Scorecard certifies; refusing"
+        )
+
+    if scorecard.recipe_hash != recipe_hash(recipe):
+        raise ValueError(
+            f"publish: scorecard.recipe_hash chứng nhận một recipe KHÁC agent_id={recipe.agent_id!r} "
+            f"tenant_id={recipe.tenant_id} — recipe_hash(recipe) không khớp scorecard.recipe_hash; refusing"
         )
 
     if scorecard.gate.verdict == "FAIL":
@@ -181,24 +214,35 @@ async def rollback(agent_id: str, tenant_id: UUID, *, to_version: int, conn: DbC
         )
     recipe_json, history_recipe_hash = history_row
 
-    await conn.execute(
-        "UPDATE wb.recipes SET status = 'rolled_back' WHERE agent_id = %s AND tenant_id = %s AND status = 'published'",
-        (agent_id, tenant_id),
-    )
-
     cursor = await conn.execute(
         "SELECT id FROM wb.recipes WHERE agent_id = %s AND tenant_id = %s AND version = %s",
         (agent_id, tenant_id, to_version),
     )
     existing = await cursor.fetchone()
+
+    # The target version's own wb.recipes row is gone (or never existed independently of history)
+    # — the branch below recreates it from wb.recipe_versions so the endpoint has something live,
+    # carrying `history_recipe_hash` forward unchanged (SAME recipe content being re-asserted, not
+    # a new one, so the hash that already certified it is still correct). Validate BEFORE mutating
+    # anything: a `NULL` here (row published before DEC-03) would silently mark a freshly-(re)
+    # created 'published' row as unverifiable — the exact state `publish()`'s own fail-closed check
+    # refuses. Checked ahead of the `status = 'rolled_back'` demotion below so a rejected rollback
+    # never leaves the endpoint with nothing published.
+    if existing is None and history_recipe_hash is None:
+        raise ValueError(
+            f"rollback: wb.recipe_versions row for agent_id={agent_id!r} tenant_id={tenant_id} "
+            f"version={to_version} has recipe_hash=None (published before DEC-03) — refusing to "
+            "recreate a 'published' wb.recipes row with an unverifiable hash"
+        )
+
+    await conn.execute(
+        "UPDATE wb.recipes SET status = 'rolled_back' WHERE agent_id = %s AND tenant_id = %s AND status = 'published'",
+        (agent_id, tenant_id),
+    )
+
     if existing is not None:
         await conn.execute("UPDATE wb.recipes SET status = 'published' WHERE id = %s", (existing[0],))
     else:
-        # The target version's own wb.recipes row is gone (or never existed independently of
-        # history) — recreate it from wb.recipe_versions so the endpoint has something live.
-        # `history_recipe_hash` carries forward unchanged — this is the SAME recipe content being
-        # re-asserted, not a new one, so the hash that already certified it is still correct; a
-        # `NULL` here would silently make a legitimately-hashed recipe look unverified again.
         await conn.execute(
             """
             INSERT INTO wb.recipes (agent_id, tenant_id, recipe, version, status, recipe_hash)

@@ -10,10 +10,15 @@ plan.md "Dependency matrix & file-ownership").
 type) + a `status` lifecycle column (`draft`/`published`/`rolled_back`, spec-only for now — the
 concrete state machine lands with `publish.py`'s real implementation) + `recipe_hash` (DEC-03,
 `publish.recipe_hash()`) — the SAME value `Scorecard.recipe_hash` carried at publish time, stored
-alongside the `recipe` JSONB it was computed from so a stored row can answer "what hash certifies
-this exact JSONB" without recomputing anything. `NULL` for any row published before this column
-existed. `eval.scorecards` (a DIFFERENT quadrant, `packages/evalhub`) has no writer yet and no
-`recipe_hash` column of its own — tracked as `agentcore-studio-evalhub#28`, out of scope here.
+alongside the `recipe` JSONB it was computed from. **Not** byte-identical to what was hashed,
+though: `recipe` here is `Recipe.model_dump_json()` (no alias), while `recipe_hash()` hashes
+`model_dump(mode="json", by_alias=True)` with sorted keys (see `publish.py`'s module docstring) —
+verifying a row means recomputing `publish.recipe_hash(Recipe.model_validate(row["recipe"]))` from
+the reconstructed object (safe: `Edge.populate_by_name=True` accepts both the aliased and
+unaliased key on input), never a raw byte/string comparison against the stored JSONB directly.
+`NULL` for any row published before this column existed. `eval.scorecards` (a DIFFERENT quadrant,
+`packages/evalhub`) has no writer yet and no `recipe_hash` column of its own — tracked as
+`agentcore-studio-evalhub#28`, out of scope here.
 
 D11 fix: `tenant` was `TEXT` (pre-D-13 slug), now `tenant_id UUID` to match
 `studio_contracts.recipe.Recipe.tenant_id` — the contract this table stores rows FOR already
