@@ -1,6 +1,11 @@
 """Recipe Builder module for Workbench (SWE owner — Thiệu Quang Minh).
 
-Provides unified recipe building functions for Day 3, Day 4, Day 6, and dynamic DAG recipes.
+Provides unified recipe building functions for Day 4, Day 6, and dynamic DAG recipes.
+
+`create_sample_recipe_d3`/alias `create_recipe_d3` (Day 3 precursor) removed Day 21 — kiểm kê
+toàn repo xác nhận 0 caller ngoài `packages/workbench` (không production, không submodule khác),
+hành vi là tập con thật sự của `create_recipe_d4`. Xem `docs/design-notes/
+swe-day21-user-flow-diagrams.md` cho evidence đầy đủ.
 """
 
 from __future__ import annotations
@@ -136,41 +141,6 @@ def create_dynamic_recipe(
             citation_accuracy=citation_accuracy_threshold,
         ),
     )
-
-
-def create_sample_recipe_d3() -> Recipe:
-    """Khởi tạo một đối tượng Recipe thử nghiệm Ngày 3 chứa chuỗi 3 Node tuần tự."""
-    config = build_agent_config(
-        instructions="Hãy tra cứu tài liệu Callisto và trả lời thắc mắc của người dùng.",
-        model="gemini-2.5-flash",
-        tool_whitelist=["kb_search"],
-    )
-
-    nodes = [
-        Node(id="node_1", type=NodeType.KB_RETRIEVE, params={"query": "Callisto policy"}),
-        Node(id="node_2", type=NodeType.LLM_STEP, params={"temperature": 0.0}),
-        Node(id="node_3", type=NodeType.TOOL_CALL, params={"tool": "kb_search"}),
-        Node(id="node_4", type=NodeType.END, params={}),
-    ]
-
-    edges = [
-        Edge(from_="node_1", to="node_2"),
-        Edge(from_="node_2", to="node_3"),
-        Edge(from_="node_3", to="node_4"),
-    ]
-
-    return Recipe(
-        agent_id="agent_demo_d3",
-        tenant_id=ANKOR_ID,
-        agent_config=config,
-        dag=Dag(nodes=nodes, edges=edges),
-        kb_binding=KbBinding(kb_id="kb_callisto", scope="public"),
-        golden_set_ref="golden_set_1",
-        scorecard_threshold=ScorecardThreshold(success=0.9, citation_accuracy=0.95),
-    )
-
-
-create_recipe_d3 = create_sample_recipe_d3
 
 
 def create_recipe_d4(
@@ -327,8 +297,6 @@ __all__ = [
     "_parse_kb_scope",
     "build_agent_config",
     "create_dynamic_recipe",
-    "create_recipe_d3",
     "create_recipe_d4",
     "create_recipe_d6",
-    "create_sample_recipe_d3",
 ]
