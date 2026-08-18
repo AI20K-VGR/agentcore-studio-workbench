@@ -167,9 +167,7 @@ class FakeConn:
                 v for v in self.versions if v.agent_id == agent_id and v.tenant_id == tenant_id and v.version == version
             ]
             history_matches = sorted(candidates, key=lambda v: v.created_at, reverse=True)
-            return FakeCursor(
-                [(history_matches[0].recipe, history_matches[0].recipe_hash)] if history_matches else []
-            )
+            return FakeCursor([(history_matches[0].recipe, history_matches[0].recipe_hash)] if history_matches else [])
 
         if q.startswith("UPDATE wb.recipes SET status = 'rolled_back'"):
             agent_id, tenant_id = p
