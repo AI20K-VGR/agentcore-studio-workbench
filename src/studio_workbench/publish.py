@@ -33,6 +33,35 @@
    previous holder (if any) flips to `'draft'`. Enforcing that at MOST one row is ever
    `'published'` under concurrent publishes (partial unique index / advisory lock) is Q4 in the
    guide's register — an open, unresolved question, out of scope for this implementation.
+5b. `scorecard.agent_id != recipe.agent_id` fail-closed (review PR#28, dholmes0207): the hash gate
+   above only pins the *recipe*; `Scorecard.agent_id` is a free field on a DIFFERENT object and
+   nothing before this line forced it to agree with `recipe.agent_id`. Without this check,
+   `publish()` would happily write a `wb.recipes` row for one agent and an `eval.scorecards` row
+   for a DIFFERENT agent in the SAME transaction — the eval.scorecards row is a mixed row already
+   (`tenant_id` sourced from `recipe`, `agent_id` sourced from `scorecard`), so "mirrors
+   `Scorecard`'s shape" cannot settle this; the criterion is consistency with the row actually
+   being audited. Checked before any write, same fail-closed posture as the hash checks above.
+6. On the SAME PASS, same `conn` (`evalhub#28` mục 2): insert one `eval.scorecards` row —
+   `tenant_id`/`agent_id`/`golden_set_ref`/`results`/`aggregate`/`gate`/`recipe_hash`/
+   `recipe_version` — schema-per-quadrant (`packages/evalhub/src/studio_evalhub/schema.py`, cột
+   `recipe_hash` từ `evalhub#32`, cột `recipe_version` từ `evalhub#34`), giữ nguyên ranh giới sở
+   hữu file (không tự sửa file đó ở đây — chỉ ghi RAW SQL vào bảng của quadrant khác, không import
+   `studio_evalhub`, giống hệt cách hàm này đã ghi `wb.recipes`/`wb.recipe_versions` mà không
+   import `studio_app`). Đây là mắt xích còn thiếu `evalhub#28` tự khai: trước bản vá này, một
+   `Scorecard` chỉ sống trong một lần gọi HTTP rồi mất — không cách nào sau đó trả lời *"scorecard
+   nào đã chứng nhận version nào của agent này"*. Chỉ ghi trên đường PASS (cùng lúc với 2 `INSERT`
+   phía trên) — một lần `publish()` bị chặn (FAIL/graph-lint/hash/agent_id) không tạo ra bản
+   certify nào để ghi audit.
+
+   **`recipe_version = next_version`** (đã tính ở bước 5 phía trên, cùng giá trị ghi vào
+   `wb.recipes`/`wb.recipe_versions`) — KHÔNG phải đọc lại `recipe_hash` để suy ra version. Trước
+   `evalhub#34`, nối `eval.scorecards → wb.*` chỉ qua `recipe_hash` là one-to-MANY: republish nội
+   dung y nguyên bump `version` nhưng giữ nguyên hash, nên hash một mình không phân biệt được version
+   nào. Truyền thẳng `next_version` (giá trị THẬT vừa dùng để ghi `wb.recipes`, không suy luận lại
+   từ hash) là điều đóng gap đó — khoá đọc đúng là `(agent_id, tenant_id, recipe_version)` vào
+   `wb.recipes` (bảng có `UNIQUE` trên 3 cột đó; `wb.recipe_versions` thì không, xem `rollback()`
+   bên dưới). Cột `recipe_version` nullable phía evalhub (writer cũ/writer chưa truyền vẫn ghi
+   được) — giá trị ở đây luôn non-`None` vì `next_version` luôn có sẵn trên mọi đường PASS.
 
 `recipe_hash(recipe)` (DEC-03, tracked `agentcore-studio-evalhub/docs/decisions/scorecard.md` —
 overdue since D12, closed here) is the missing producer `Scorecard.recipe_hash` needed all along:
@@ -129,11 +158,12 @@ def recipe_hash(recipe: Recipe) -> str:
 
 
 async def publish(recipe: Recipe, scorecard: Scorecard, conn: DbConnection) -> None:
-    """Validate `recipe` (via `graph_lint`), gate-check it against `scorecard.gate.verdict` and
-    `scorecard.recipe_hash`, then publish it to the named endpoint. `verdict == "FAIL"` (or a
-    missing `recipe_hash`) blocks publish and triggers a `rollback()` re-assertion of whichever
-    version was already live. Raises `ValueError` on any rejection — never returns a boolean/
-    report object, matching `graph_lint`'s own convention.
+    """Validate `recipe` (via `graph_lint`), gate-check it against `scorecard.gate.verdict`,
+    `scorecard.recipe_hash`, and `scorecard.agent_id`, then publish it to the named endpoint. A
+    missing/mismatched `recipe_hash` or an `agent_id` that disagrees with `recipe.agent_id` blocks
+    publish outright; `verdict == "FAIL"` additionally triggers a `rollback()` re-assertion of
+    whichever version was already live. Raises `ValueError` on any rejection — never returns a
+    boolean/report object, matching `graph_lint`'s own convention.
     """
     graph_lint(recipe)
 
@@ -147,6 +177,13 @@ async def publish(recipe: Recipe, scorecard: Scorecard, conn: DbConnection) -> N
         raise ValueError(
             f"publish: scorecard.recipe_hash chứng nhận một recipe KHÁC agent_id={recipe.agent_id!r} "
             f"tenant_id={recipe.tenant_id} — recipe_hash(recipe) không khớp scorecard.recipe_hash; refusing"
+        )
+
+    if scorecard.agent_id != recipe.agent_id:
+        raise ValueError(
+            f"publish: scorecard.agent_id={scorecard.agent_id!r} không khớp recipe.agent_id="
+            f"{recipe.agent_id!r} tenant_id={recipe.tenant_id} — recipe và scorecard phải cùng khai "
+            "một agent; refusing"
         )
 
     if scorecard.gate.verdict == "FAIL":
@@ -190,6 +227,24 @@ async def publish(recipe: Recipe, scorecard: Scorecard, conn: DbConnection) -> N
         VALUES (%s, %s, %s, %s::jsonb, %s, 'published', %s)
         """,
         (recipe_row_id, recipe.agent_id, recipe.tenant_id, recipe_json, next_version, scorecard.recipe_hash),
+    )
+
+    await conn.execute(
+        """
+        INSERT INTO eval.scorecards
+            (tenant_id, agent_id, golden_set_ref, results, aggregate, gate, recipe_hash, recipe_version)
+        VALUES (%s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s, %s)
+        """,
+        (
+            recipe.tenant_id,
+            scorecard.agent_id,
+            scorecard.golden_set_ref,
+            json.dumps([result.model_dump(mode="json") for result in scorecard.results]),
+            json.dumps(scorecard.aggregate.model_dump(mode="json")),
+            json.dumps(scorecard.gate.model_dump(mode="json")),
+            scorecard.recipe_hash,
+            next_version,
+        ),
     )
 
 
