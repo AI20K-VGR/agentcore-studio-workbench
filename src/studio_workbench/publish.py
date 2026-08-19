@@ -42,23 +42,26 @@
    `Scorecard`'s shape" cannot settle this; the criterion is consistency with the row actually
    being audited. Checked before any write, same fail-closed posture as the hash checks above.
 6. On the SAME PASS, same `conn` (`evalhub#28` mục 2): insert one `eval.scorecards` row —
-   `tenant_id`/`agent_id`/`golden_set_ref`/`results`/`aggregate`/`gate`/`recipe_hash` — schema-per-
-   quadrant (`packages/evalhub/src/studio_evalhub/schema.py`, cột `recipe_hash` đã có từ
-   `evalhub#32`), giữ nguyên ranh giới sở hữu file (không tự sửa file đó ở đây — chỉ ghi RAW SQL
-   vào bảng của quadrant khác, không import `studio_evalhub`, giống hệt cách hàm này đã ghi
-   `wb.recipes`/`wb.recipe_versions` mà không import `studio_app`). Đây là mắt xích còn thiếu
-   `evalhub#28` tự khai: trước bản vá này, một `Scorecard` chỉ sống trong một lần gọi HTTP rồi
-   mất — không cách nào sau đó trả lời *"scorecard nào đã chứng nhận hash recipe nào"*.
-   Chỉ ghi trên đường PASS (cùng lúc với 2 `INSERT` phía trên) — một lần `publish()` bị chặn
-   (FAIL/graph-lint/hash/agent_id) không tạo ra bản certify nào để ghi audit.
+   `tenant_id`/`agent_id`/`golden_set_ref`/`results`/`aggregate`/`gate`/`recipe_hash`/
+   `recipe_version` — schema-per-quadrant (`packages/evalhub/src/studio_evalhub/schema.py`, cột
+   `recipe_hash` từ `evalhub#32`, cột `recipe_version` từ `evalhub#34`), giữ nguyên ranh giới sở
+   hữu file (không tự sửa file đó ở đây — chỉ ghi RAW SQL vào bảng của quadrant khác, không import
+   `studio_evalhub`, giống hệt cách hàm này đã ghi `wb.recipes`/`wb.recipe_versions` mà không
+   import `studio_app`). Đây là mắt xích còn thiếu `evalhub#28` tự khai: trước bản vá này, một
+   `Scorecard` chỉ sống trong một lần gọi HTTP rồi mất — không cách nào sau đó trả lời *"scorecard
+   nào đã chứng nhận version nào của agent này"*. Chỉ ghi trên đường PASS (cùng lúc với 2 `INSERT`
+   phía trên) — một lần `publish()` bị chặn (FAIL/graph-lint/hash/agent_id) không tạo ra bản
+   certify nào để ghi audit.
 
-   **Known gap, stated rather than hidden (review PR#28 mục 2, dholmes0207):** the link back to
-   `wb.recipe_versions` is by `recipe_hash` alone, which is one-to-MANY with `version` — republishing
-   byte-identical content bumps `version` but reuses the same hash, so `eval.scorecards` currently
-   answers *"which recipe HASH does this certify"*, not yet *"which version NUMBER"*. Closing that
-   gap needs a `version` column on `eval.scorecards` (evalhub-owned DDL, not added here — file-
-   ownership boundary above) plus threading `next_version` through this call; tracked in
-   `evalhub#28`, not done in this PR.
+   **`recipe_version = next_version`** (đã tính ở bước 5 phía trên, cùng giá trị ghi vào
+   `wb.recipes`/`wb.recipe_versions`) — KHÔNG phải đọc lại `recipe_hash` để suy ra version. Trước
+   `evalhub#34`, nối `eval.scorecards → wb.*` chỉ qua `recipe_hash` là one-to-MANY: republish nội
+   dung y nguyên bump `version` nhưng giữ nguyên hash, nên hash một mình không phân biệt được version
+   nào. Truyền thẳng `next_version` (giá trị THẬT vừa dùng để ghi `wb.recipes`, không suy luận lại
+   từ hash) là điều đóng gap đó — khoá đọc đúng là `(agent_id, tenant_id, recipe_version)` vào
+   `wb.recipes` (bảng có `UNIQUE` trên 3 cột đó; `wb.recipe_versions` thì không, xem `rollback()`
+   bên dưới). Cột `recipe_version` nullable phía evalhub (writer cũ/writer chưa truyền vẫn ghi
+   được) — giá trị ở đây luôn non-`None` vì `next_version` luôn có sẵn trên mọi đường PASS.
 
 `recipe_hash(recipe)` (DEC-03, tracked `agentcore-studio-evalhub/docs/decisions/scorecard.md` —
 overdue since D12, closed here) is the missing producer `Scorecard.recipe_hash` needed all along:
@@ -228,8 +231,9 @@ async def publish(recipe: Recipe, scorecard: Scorecard, conn: DbConnection) -> N
 
     await conn.execute(
         """
-        INSERT INTO eval.scorecards (tenant_id, agent_id, golden_set_ref, results, aggregate, gate, recipe_hash)
-        VALUES (%s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s)
+        INSERT INTO eval.scorecards
+            (tenant_id, agent_id, golden_set_ref, results, aggregate, gate, recipe_hash, recipe_version)
+        VALUES (%s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s, %s)
         """,
         (
             recipe.tenant_id,
@@ -239,6 +243,7 @@ async def publish(recipe: Recipe, scorecard: Scorecard, conn: DbConnection) -> N
             json.dumps(scorecard.aggregate.model_dump(mode="json")),
             json.dumps(scorecard.gate.model_dump(mode="json")),
             scorecard.recipe_hash,
+            next_version,
         ),
     )
 

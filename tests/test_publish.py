@@ -116,6 +116,7 @@ class _ScorecardRow:
     aggregate: str
     gate: str
     recipe_hash: str | None
+    recipe_version: int | None
 
 
 @dataclass
@@ -175,9 +176,11 @@ class FakeConn:
             return FakeCursor()
 
         if q.startswith("INSERT INTO eval.scorecards"):
-            tenant_id, agent_id, golden_set_ref, results, aggregate, gate, recipe_hash = p
+            tenant_id, agent_id, golden_set_ref, results, aggregate, gate, recipe_hash, recipe_version = p
             self.scorecards.append(
-                _ScorecardRow(tenant_id, agent_id, golden_set_ref, results, aggregate, gate, recipe_hash)
+                _ScorecardRow(
+                    tenant_id, agent_id, golden_set_ref, results, aggregate, gate, recipe_hash, recipe_version
+                )
             )
             return FakeCursor()
 
@@ -396,7 +399,8 @@ async def test_publish_writes_eval_scorecards_audit_row_on_pass() -> None:
     mà issue tự khai: trước bản vá, `Scorecard` chỉ sống trong 1 lần gọi HTTP rồi mất, không cách
     nào sau đó trả lời "scorecard nào đã chứng nhận version nào của agent này". Kiểm nội dung
     THẬT (parse lại JSON), không chỉ đếm số hàng — `results`/`aggregate`/`gate` phải khớp ĐÚNG
-    scorecard đã truyền vào, không phải một payload rỗng/giả."""
+    scorecard đã truyền vào, không phải một payload rỗng/giả. `recipe_version` (evalhub#34) phải
+    bằng ĐÚNG `next_version` vừa ghi vào `wb.recipes` — publish đầu tiên nên là 1."""
     conn = FakeConn()
     recipe = _valid_recipe()
     scorecard = _scorecard(verdict="PASS", recipe_hash=recipe_hash(recipe))
@@ -408,6 +412,7 @@ async def test_publish_writes_eval_scorecards_audit_row_on_pass() -> None:
     assert row.agent_id == scorecard.agent_id
     assert row.golden_set_ref == scorecard.golden_set_ref
     assert row.recipe_hash == scorecard.recipe_hash
+    assert row.recipe_version == conn.recipes[0].version == 1
     assert json.loads(row.results) == [r.model_dump(mode="json") for r in scorecard.results]
     assert json.loads(row.aggregate) == scorecard.aggregate.model_dump(mode="json")
     assert json.loads(row.gate) == scorecard.gate.model_dump(mode="json")
@@ -418,13 +423,21 @@ async def test_publish_second_pass_writes_second_eval_scorecards_row() -> None:
     upsert/ghi đè hàng cũ. Đối chứng trực tiếp `test_publish_second_pass_bumps_version_and_
     demotes_prior` (bumps version, demotes prior) ở phía `wb.recipes`: phía `eval.scorecards`
     không có khái niệm "demote", mỗi run là một chứng nhận độc lập, kể cả khi publish 2 lần liên
-    tiếp cho CÙNG agent/tenant."""
+    tiếp cho CÙNG agent/tenant.
+
+    KHÓA thêm (`evalhub#34`, review `workbench#28` mục 🟠2): publish 2 lần liên tiếp CÙNG một
+    recipe (nội dung không đổi) cho ra CÙNG một `recipe_hash` ở cả 2 hàng — đúng ca mà review dùng
+    để chứng minh "nối bằng hash là một-nhiều". `recipe_version` phải PHÂN BIỆT được hai hàng đó
+    (1 và 2) dù hash giống hệt nhau — nếu không, câu hỏi "scorecard nào chứng nhận version nào"
+    vẫn treo y như trước khi có cột này."""
     conn = FakeConn()
     recipe = _valid_recipe()
     await publish(recipe, _scorecard(verdict="PASS", recipe_hash=recipe_hash(recipe)), conn)
     await publish(recipe, _scorecard(verdict="PASS", recipe_hash=recipe_hash(recipe)), conn)
 
     assert len(conn.scorecards) == 2
+    assert conn.scorecards[0].recipe_hash == conn.scorecards[1].recipe_hash  # cùng nội dung, cùng hash
+    assert [row.recipe_version for row in conn.scorecards] == [1, 2]  # nhưng version phân biệt được
 
 
 async def test_rollback_recreated_row_carries_forward_recipe_hash() -> None:
@@ -558,7 +571,7 @@ async def test_publish_rls_blocks_cross_tenant_write(pool: Any) -> None:
     import psycopg
 
     recipe = _valid_recipe(agent_id="cross-tenant-agent", tenant_id=ANKOR_ID)
-    scorecard = _scorecard(verdict="PASS", recipe_hash=recipe_hash(recipe))
+    scorecard = _scorecard(verdict="PASS", recipe_hash=recipe_hash(recipe), agent_id="cross-tenant-agent")
 
     with pytest.raises(psycopg.Error):
         async with pool.connection() as conn, conn.transaction():
@@ -571,7 +584,7 @@ async def test_publish_rls_allows_matching_tenant_write(pool: Any) -> None:
     connection bound to the MATCHING tenant, succeeds and the row is readable back through the
     same app pool (B-P01 [4] — never the admin pool, which would bypass the policy)."""
     recipe = _valid_recipe(agent_id="matching-tenant-agent", tenant_id=ANKOR_ID)
-    scorecard = _scorecard(verdict="PASS", recipe_hash=recipe_hash(recipe))
+    scorecard = _scorecard(verdict="PASS", recipe_hash=recipe_hash(recipe), agent_id="matching-tenant-agent")
 
     async with pool.connection() as conn, conn.transaction():
         await _bind_tenant(conn, ANKOR_ID)
@@ -592,17 +605,21 @@ async def test_publish_rls_allows_matching_tenant_write(pool: Any) -> None:
 async def test_publish_writes_real_eval_scorecards_row_on_real_postgres(pool: Any) -> None:
     """KHÓA (`evalhub#28` mục 2), trên Postgres THẬT — không phải `FakeConn`. `eval.scorecards`
     là DDL của quadrant khác (`packages/evalhub/src/studio_evalhub/schema.py`, cột `recipe_hash`
-    từ `evalhub#32`), dựng qua `admin_pool` fixture chung (root `conftest.py` gọi
-    `ensure_all_schemas()` — chạy DDL của MỌI quadrant, không chỉ `wb.*`). Đọc lại đúng qua app
-    pool (B-P01 [4] — không dùng admin pool, để chính RLS của `eval.scorecards` cũng phải cho
-    qua), và so nội dung JSONB đọc ngược lại với scorecard gốc — không chỉ đếm hàng.
+    từ `evalhub#32`, cột `recipe_version` từ `evalhub#34`), dựng qua `admin_pool` fixture chung
+    (root `conftest.py` gọi `ensure_all_schemas()` — chạy DDL của MỌI quadrant, không chỉ `wb.*`).
+    Đọc lại đúng qua app pool (B-P01 [4] — không dùng admin pool, để chính RLS của `eval.scorecards`
+    cũng phải cho qua), và so nội dung JSONB đọc ngược lại với scorecard gốc — không chỉ đếm hàng.
 
     Cột `agent_id` của `eval.scorecards` lấy từ `scorecard.agent_id` (không phải `recipe.agent_id`
     — hai trường tên trùng nhưng SỐNG trên hai object khác nhau; bảng này mirror đúng shape của
     `Scorecard`, không phải của `Recipe`). Từ review PR#28 (dholmes0207), `publish()` giờ ĐÒI HỎI
     hai trường này khớp nhau (fail-closed nếu lệch — xem `test_publish_refuses_when_scorecard_
     agent_id_does_not_match_recipe`); recipe và scorecard ở đây dùng chung một `agent_id` vì đó là
-    điều kiện BẮT BUỘC để publish đi qua, không còn là lựa chọn tự do của bài test."""
+    điều kiện BẮT BUỘC để publish đi qua, không còn là lựa chọn tự do của bài test.
+
+    `recipe_version` phải bằng ĐÚNG `version` vừa ghi trên hàng `wb.recipes` tương ứng — publish
+    đầu tiên cho một agent/tenant mới nên là 1, đọc lại qua CHÍNH Postgres thật (không phải giá trị
+    tính tay), để không chỉ pin đúng bằng con số trùng hợp."""
     recipe = _valid_recipe(agent_id="scorecards-audit-agent", tenant_id=ANKOR_ID)
     scorecard = _scorecard(verdict="PASS", recipe_hash=recipe_hash(recipe), agent_id="scorecards-audit-agent")
 
@@ -613,17 +630,24 @@ async def test_publish_writes_real_eval_scorecards_row_on_real_postgres(pool: An
     async with pool.connection() as conn, conn.transaction():
         await _bind_tenant(conn, ANKOR_ID)
         cursor = await conn.execute(
-            "SELECT agent_id, golden_set_ref, results, aggregate, gate, recipe_hash "
+            "SELECT agent_id, golden_set_ref, results, aggregate, gate, recipe_hash, recipe_version "
             "FROM eval.scorecards WHERE tenant_id = %s AND agent_id = %s",
             (ANKOR_ID, "scorecards-audit-agent"),
         )
         row = await cursor.fetchone()
+        recipes_cursor = await conn.execute(
+            "SELECT version FROM wb.recipes WHERE tenant_id = %s AND agent_id = %s",
+            (ANKOR_ID, "scorecards-audit-agent"),
+        )
+        recipe_row = await recipes_cursor.fetchone()
 
     assert row is not None
-    agent_id, golden_set_ref, results, aggregate, gate, recipe_hash_col = row
+    assert recipe_row is not None
+    agent_id, golden_set_ref, results, aggregate, gate, recipe_hash_col, recipe_version_col = row
     assert agent_id == scorecard.agent_id
     assert golden_set_ref == scorecard.golden_set_ref
     assert recipe_hash_col == scorecard.recipe_hash
+    assert recipe_version_col == recipe_row[0]
     assert results == [r.model_dump(mode="json") for r in scorecard.results]
     assert aggregate == scorecard.aggregate.model_dump(mode="json")
     assert gate == scorecard.gate.model_dump(mode="json")
