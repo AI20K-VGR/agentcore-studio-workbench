@@ -345,6 +345,24 @@ async def test_publish_refuses_when_recipe_hash_does_not_match_recipe() -> None:
     assert conn.scorecards == []
 
 
+async def test_publish_refuses_when_scorecard_agent_id_does_not_match_recipe() -> None:
+    """KHÓA (review PR#28, dholmes0207): cổng hash chỉ ghim `recipe`; `scorecard.agent_id` sống
+    trên một object KHÁC và không có gì trước đây buộc nó khớp `recipe.agent_id`. Không có cổng
+    này, `publish()` sẽ ghi `wb.recipes` cho một agent và `eval.scorecards` cho một agent KHÁC
+    trong CÙNG transaction — dò bằng đúng probe review nêu: `recipe.agent_id="agent-1"`,
+    `scorecard.agent_id="agent-hoan-toan-khac"`. Phải bị từ chối, và không hàng nào được ghi ở cả
+    hai bảng (paired với `test_publish_writes_new_version_on_pass` bên dưới — cùng lời gọi, agent_id
+    khớp thì đi qua được)."""
+    conn = FakeConn()
+    recipe = _valid_recipe(agent_id="agent-1")
+    mismatched_scorecard = _scorecard(verdict="PASS", recipe_hash=recipe_hash(recipe), agent_id="agent-hoan-toan-khac")
+
+    with pytest.raises(ValueError, match="agent_id"):
+        await publish(recipe, mismatched_scorecard, conn)
+    assert conn.recipes == []
+    assert conn.scorecards == []
+
+
 async def test_publish_writes_new_version_on_pass() -> None:
     """KHÓA: paired positive control for the two refusal tests above — graph-lint-clean recipe +
     non-`None` `recipe_hash` + `verdict="PASS"` writes exactly one `wb.recipes` row (status
@@ -581,8 +599,10 @@ async def test_publish_writes_real_eval_scorecards_row_on_real_postgres(pool: An
 
     Cột `agent_id` của `eval.scorecards` lấy từ `scorecard.agent_id` (không phải `recipe.agent_id`
     — hai trường tên trùng nhưng SỐNG trên hai object khác nhau; bảng này mirror đúng shape của
-    `Scorecard`, không phải của `Recipe`), nên recipe và scorecard ở đây CỐ Ý dùng chung một
-    `agent_id` — đúng luồng thật, nơi cả hai luôn mô tả CÙNG một agent."""
+    `Scorecard`, không phải của `Recipe`). Từ review PR#28 (dholmes0207), `publish()` giờ ĐÒI HỎI
+    hai trường này khớp nhau (fail-closed nếu lệch — xem `test_publish_refuses_when_scorecard_
+    agent_id_does_not_match_recipe`); recipe và scorecard ở đây dùng chung một `agent_id` vì đó là
+    điều kiện BẮT BUỘC để publish đi qua, không còn là lựa chọn tự do của bài test."""
     recipe = _valid_recipe(agent_id="scorecards-audit-agent", tenant_id=ANKOR_ID)
     scorecard = _scorecard(verdict="PASS", recipe_hash=recipe_hash(recipe), agent_id="scorecards-audit-agent")
 
