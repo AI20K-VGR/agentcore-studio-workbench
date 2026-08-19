@@ -63,7 +63,7 @@
     "kb_id": "kb-callisto-v1",
     "scope": "ankor/public"
   },
-  "golden_set_ref": "callisto-smoke-5-v0",
+  "golden_set_ref": "callisto-2.0-golden-30-v1",
   "scorecard_threshold": {
     "success": 0.9,
     "citation_accuracy": 0.95
