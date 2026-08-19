@@ -33,6 +33,16 @@
    previous holder (if any) flips to `'draft'`. Enforcing that at MOST one row is ever
    `'published'` under concurrent publishes (partial unique index / advisory lock) is Q4 in the
    guide's register — an open, unresolved question, out of scope for this implementation.
+6. On the SAME PASS, same `conn` (`evalhub#28` mục 2): insert one `eval.scorecards` row —
+   `tenant_id`/`agent_id`/`golden_set_ref`/`results`/`aggregate`/`gate`/`recipe_hash` — schema-per-
+   quadrant (`packages/evalhub/src/studio_evalhub/schema.py`, cột `recipe_hash` đã có từ
+   `evalhub#32`), giữ nguyên ranh giới sở hữu file (không tự sửa file đó ở đây — chỉ ghi RAW SQL
+   vào bảng của quadrant khác, không import `studio_evalhub`, giống hệt cách hàm này đã ghi
+   `wb.recipes`/`wb.recipe_versions` mà không import `studio_app`). Đây là mắt xích còn thiếu
+   `evalhub#28` tự khai: trước bản vá này, một `Scorecard` chỉ sống trong một lần gọi HTTP rồi
+   mất — không cách nào sau đó trả lời *"scorecard nào đã chứng nhận version nào của agent này"*.
+   Chỉ ghi trên đường PASS (cùng lúc với 2 `INSERT` phía trên) — một lần `publish()` bị chặn
+   (FAIL/graph-lint/hash) không tạo ra bản certify nào để ghi audit.
 
 `recipe_hash(recipe)` (DEC-03, tracked `agentcore-studio-evalhub/docs/decisions/scorecard.md` —
 overdue since D12, closed here) is the missing producer `Scorecard.recipe_hash` needed all along:
@@ -190,6 +200,22 @@ async def publish(recipe: Recipe, scorecard: Scorecard, conn: DbConnection) -> N
         VALUES (%s, %s, %s, %s::jsonb, %s, 'published', %s)
         """,
         (recipe_row_id, recipe.agent_id, recipe.tenant_id, recipe_json, next_version, scorecard.recipe_hash),
+    )
+
+    await conn.execute(
+        """
+        INSERT INTO eval.scorecards (tenant_id, agent_id, golden_set_ref, results, aggregate, gate, recipe_hash)
+        VALUES (%s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s)
+        """,
+        (
+            recipe.tenant_id,
+            scorecard.agent_id,
+            scorecard.golden_set_ref,
+            json.dumps([result.model_dump(mode="json") for result in scorecard.results]),
+            scorecard.aggregate.model_dump_json(),
+            scorecard.gate.model_dump_json(),
+            scorecard.recipe_hash,
+        ),
     )
 
 
