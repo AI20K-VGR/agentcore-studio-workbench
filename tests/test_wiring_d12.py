@@ -54,7 +54,7 @@ def test_canvas_export_passes_contract_and_lint() -> None:
     assert recipe.agent_id == "agent-callisto-d12"
     # tenant_id phải là UUID thật, không phải slug — đây là điểm D-13 mà form cũ trượt.
     assert recipe.tenant_id == UUID("a0000000-0000-0000-0000-000000000001")
-    assert recipe.golden_set_ref == "callisto-smoke-5-v0"
+    assert recipe.golden_set_ref == "callisto-2.0-golden-30-v1"
     assert recipe.scorecard_threshold.success == pytest.approx(0.9)
 
 
