@@ -369,7 +369,14 @@ async def test_publish_refuses_when_scorecard_agent_id_does_not_match_recipe() -
 async def test_publish_writes_new_version_on_pass() -> None:
     """KHÓA: paired positive control for the two refusal tests above — graph-lint-clean recipe +
     non-`None` `recipe_hash` + `verdict="PASS"` writes exactly one `wb.recipes` row (status
-    `published`, version 1) and one matching `wb.recipe_versions` row."""
+    `published`, version 1) and one matching `wb.recipe_versions` row.
+
+    Review workbench#30 (TranBaDat2607, request-changes soft): also locks the exact fixed
+    behavior — `publish()`'s `recipe_json = recipe.model_dump_json(by_alias=True)` (`publish.py`)
+    must serialize `Edge.from_` under its wire alias `"from"`, not the Python field name `"from_"`.
+    `recipe_hash()` already had `test_recipe_hash_is_alias_invariant` guarding this; the write path
+    fixed here had no equivalent, so a future refactor could silently drop `by_alias=True` again
+    and nothing would catch it until it reproduced the exact production bug (app#37)."""
     conn = FakeConn()
     recipe = _valid_recipe()
     await publish(recipe, _scorecard(verdict="PASS", recipe_hash=recipe_hash(recipe)), conn)
@@ -379,6 +386,12 @@ async def test_publish_writes_new_version_on_pass() -> None:
     assert conn.recipes[0].status == "published"
     assert len(conn.versions) == 1
     assert conn.versions[0].version == 1
+
+    stored_edges = json.loads(conn.recipes[0].recipe)["dag"]["edges"]
+    assert stored_edges, "seed phải có cạnh, không thì assert dưới vô nghĩa"
+    assert all("from" in e and "from_" not in e for e in stored_edges), (
+        f"recipe_json phải ghi alias dây 'from', không phải tên field Python 'from_' — thấy {stored_edges}"
+    )
 
 
 async def test_publish_stores_recipe_hash_on_both_tables() -> None:
