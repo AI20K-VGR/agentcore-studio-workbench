@@ -205,7 +205,17 @@ async def publish(recipe: Recipe, scorecard: Scorecard, conn: DbConnection) -> N
         (recipe.agent_id, recipe.tenant_id),
     )
 
-    recipe_json = recipe.model_dump_json()
+    # `by_alias=True` bắt buộc — mặc định `model_dump_json()` dùng TÊN FIELD PYTHON
+    # (`Edge.from_`), không phải alias dây (`"from"`). `Recipe.model_validate()` (Python, có
+    # `populate_by_name=True`) đọc lại được cả 2 dạng nên lỗi này vô hình ở MỌI consumer Python
+    # (`chat.py::_load_published_recipe`, v.v.) — chỉ lộ ra khi 1 consumer đọc thẳng JSONB này trả
+    # ra HTTP cho client không qua bước validate lại (`routes/agents.py::get_agent_recipe`, app#34):
+    # `apps/web`'s `WireEdge`/`fromCanvas.ts` chỉ biết `"from"`, đọc `"from_"` ra `undefined` — mọi
+    # cạnh trỏ về 1 node không tồn tại, canvas TRÔNG như có cạnh (handle nối vẫn vẽ) nhưng
+    # `graph_lint` thấy 0 cạnh thật, báo "DAG phải có đúng 1 start node, tìm thấy 4". Cùng kỷ luật
+    # `recipe_hash()` ở trên (dòng ~151-152) đã dùng đúng `by_alias=True` cho HASH — chỗ NÀY (đường
+    # ghi thật vào `wb.recipes`/`wb.recipe_versions`) là chỗ duy nhất còn sót.
+    recipe_json = recipe.model_dump_json(by_alias=True)
     cursor = await conn.execute(
         """
         INSERT INTO wb.recipes (agent_id, tenant_id, recipe, version, status, recipe_hash)

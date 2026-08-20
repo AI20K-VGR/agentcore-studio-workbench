@@ -10,12 +10,16 @@ plan.md "Dependency matrix & file-ownership").
 type) + a `status` lifecycle column (`draft`/`published`/`rolled_back`, spec-only for now — the
 concrete state machine lands with `publish.py`'s real implementation) + `recipe_hash` (DEC-03,
 `publish.recipe_hash()`) — the SAME value `Scorecard.recipe_hash` carried at publish time, stored
-alongside the `recipe` JSONB it was computed from. **Not** byte-identical to what was hashed,
-though: `recipe` here is `Recipe.model_dump_json()` (no alias), while `recipe_hash()` hashes
-`model_dump(mode="json", by_alias=True)` with sorted keys (see `publish.py`'s module docstring) —
-verifying a row means recomputing `publish.recipe_hash(Recipe.model_validate(row["recipe"]))` from
-the reconstructed object (safe: `Edge.populate_by_name=True` accepts both the aliased and
-unaliased key on input), never a raw byte/string comparison against the stored JSONB directly.
+alongside the `recipe` JSONB it was computed from. **Not necessarily** byte-identical to what was
+hashed: `publish()` writes `recipe` via `Recipe.model_dump_json(by_alias=True)` (fixed in
+workbench#30 — before that PR it omitted `by_alias`, so `Edge.from_` serialized as `"from_"`
+instead of the wire alias `"from"`), while `recipe_hash()` hashes `model_dump(mode="json",
+by_alias=True)` with sorted keys (see `publish.py`'s module docstring). Rows published before
+workbench#30 still carry the pre-fix (no-alias) shape — this table's contents are mixed across that
+boundary. Either way, verifying a row means recomputing
+`publish.recipe_hash(Recipe.model_validate(row["recipe"]))` from the reconstructed object (safe:
+`Edge.populate_by_name=True` accepts both the aliased and unaliased key on input), never a raw
+byte/string comparison against the stored JSONB directly.
 `NULL` for any row published before this column existed. `eval.scorecards` (a DIFFERENT quadrant,
 `packages/evalhub`) has no writer yet and no `recipe_hash` column of its own — tracked as
 `agentcore-studio-evalhub#28`, out of scope here.
