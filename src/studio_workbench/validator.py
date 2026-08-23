@@ -112,8 +112,7 @@ def graph_lint(recipe: Recipe) -> None:
         invalid_targets = [target for target in targets if nodes_by_id[target].type != NodeType.TOOL_CALL]
         if invalid_targets:
             raise ValueError(
-                f"graph_lint: MAIN node {source_id!r} may fan out only to `tool-call`, "
-                f"got targets {invalid_targets!r}"
+                f"graph_lint: MAIN node {source_id!r} may fan out only to `tool-call`, got targets {invalid_targets!r}"
             )
 
     # Rule 5 — no forbidden cycle. Standard 3-color DFS: WHITE = unvisited, GRAY = on the
@@ -158,8 +157,7 @@ def graph_lint(recipe: Recipe) -> None:
     for node_id in reachable:
         if len(adjacency[node_id]) == 0 and nodes_by_id[node_id].type != NodeType.END:
             raise ValueError(
-                f"graph_lint: reachable leaf node {node_id!r} must be type `end`, "
-                f"got {nodes_by_id[node_id].type!r}"
+                f"graph_lint: reachable leaf node {node_id!r} must be type `end`, got {nodes_by_id[node_id].type!r}"
             )
 
     # Rule 7 — every `tool-call` node's tool must be in agent_config.tool_whitelist.
