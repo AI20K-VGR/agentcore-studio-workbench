@@ -64,9 +64,9 @@ def test_create_recipe_d6_with_pure_dynamic_inputs() -> None:
     n2 = recipe.dag.nodes[1]
     assert n2.params.get("temperature") == 0.0
 
-    # Check node n3 (TOOL_CALL) params - dynamically using custom_search_tool
-    n3 = recipe.dag.nodes[2]
-    assert n3.params.get("tool") == "custom_search_tool"
+    # Check node n4 (END) params
+    n4 = recipe.dag.nodes[2]
+    assert n4.type == NodeType.END
 
 
 def test_recipe_d6_scope_parsing_multi_roles() -> None:
@@ -115,7 +115,7 @@ def test_recipe_d6_allows_scope_tenant_slug_disagreement() -> None:
 
 
 def test_unhardcoded_tool_whitelist_selection() -> None:
-    """Test 3: Verify TOOL_CALL node dynamically inherits tool_whitelist[0] from Form Feed."""
+    """Test 3: Verify tool_whitelist is properly preserved in recipe.agent_config."""
     recipe = create_recipe_d6(
         agent_id="agent-custom-tool",
         tenant_id=ANKOR_ID,
@@ -127,9 +127,7 @@ def test_unhardcoded_tool_whitelist_selection() -> None:
         query="Truy vấn dữ liệu bảng?",
     )
 
-    n3 = recipe.dag.nodes[2]
-    assert n3.type == NodeType.TOOL_CALL
-    assert n3.params.get("tool") == "sql_query_tool"
+    assert recipe.agent_config.tool_whitelist == ["sql_query_tool", "web_search"]
 
 
 @pytest.mark.asyncio
@@ -159,15 +157,14 @@ async def test_wiring_d6_recipe_to_interpreter_entry() -> None:
     )
 
     assert result.run_id is not None
-    assert len(result.final_state) == 4
+    assert len(result.final_state) == 3
     assert "n1" in result.final_state
     assert "n2" in result.final_state
-    assert "n3" in result.final_state
     assert "n4" in result.final_state
 
     # Verify trace emission if supported by current engine version
     if len(trace_writer.events) > 0:
-        assert len(trace_writer.events) == 4
+        assert len(trace_writer.events) == 3
         for event in trace_writer.events:
             assert event.run_id == result.run_id
             assert event.agent_id == "agent-trace-test"

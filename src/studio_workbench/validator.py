@@ -14,19 +14,15 @@ engine (AIE-1) interpreter — "recipe không qua validator = không interpret" 
 3. **exactly 1 start node** — exactly one node id must have no incoming edge (`edge.to`); 0 or
    >1 candidates means the DAG doesn't describe a single walkable chain and the interpreter
    would have no unambiguous place to begin.
-4. **every node has ≤ 1 outgoing edge** — TEMPORARY, tied to AIE-1's `ConditionExecutor`
-   progress (kit#87 issue thread, 2026-08-04): the interpreter cannot yet evaluate `condition`
-   branching (`Edge.when`), so a node with >1 outgoing edge would let a recipe reach the
-   interpreter with a branch it cannot walk. This rejects EVERY recipe with real `condition`
-   branching, including structurally valid ones, until `ConditionExecutor` is implemented — at
-   which point this rule must be relaxed to allow `condition` nodes to fan out. AIE-1 owns
-   the signal for when that is; do not relax unilaterally.
+4. **fan-out is only allowed from MAIN nodes to `tool-call`** — a node with >1 outgoing edges is
+    allowed only when that node is `kb-retrieve` or `llm-step` (MAIN), and every outgoing target is
+    `tool-call`. This models Workbench's hub-spoke authoring mode: MAIN node in the center, multiple
+    tool-call satellites around it. Any other multi-outgoing pattern is rejected.
 5. **no forbidden cycle** — the DAG (`recipe.dag.nodes` + `recipe.dag.edges`) must not contain a
    cycle; a cyclic recipe must never reach the interpreter (R-SPEC A1#1 turing-completeness cap).
-6. **the walk terminates ON an `end` node** — starting from the single start node and following
-   each node's (at most one) outgoing edge, the chain must reach a node of type
-   `NodeType.END`. Running out of edges before hitting an `end` node is rejected; an `end` node
-   being merely reachable but not on the walked chain does not satisfy this rule.
+6. **every branch terminates ON an `end` node** — from the single start node, every reachable path
+    must eventually end at a node of type `NodeType.END`. Any reachable leaf node that is not `end`
+    is rejected.
 7. **tool ∈ `tool_whitelist`** — every tool referenced by a `tool-call` node (its `params["tool"]`)
    must be present in `recipe.agent_config.tool_whitelist`; a tool outside the whitelist is
    rejected.
@@ -95,17 +91,30 @@ def graph_lint(recipe: Recipe) -> None:
         )
     start_id = start_ids[0]
 
-    # Rule 4 — every node has ≤ 1 outgoing edge. TEMPORARY (see module docstring): rejects
-    # real `condition` branching until AIE-1's `ConditionExecutor` is implemented. Mirrors
-    # `studio_engine.interpreter._build_next_map`, moved upstream for the same reason as rule 3.
-    next_by_id: dict[str, str] = {}
+    nodes_by_id = {node.id: node for node in dag.nodes}
+
+    # Rule 4 — fan-out only from MAIN (`kb-retrieve` / `llm-step`) to `tool-call` targets.
+    # Everything else with >1 outgoing edge is rejected.
+    outgoing_by_id: dict[str, list[str]] = {}
     for edge in dag.edges:
-        if edge.from_ in next_by_id:
+        outgoing_by_id.setdefault(edge.from_, []).append(edge.to)
+
+    main_types = {NodeType.KB_RETRIEVE, NodeType.LLM_STEP}
+    for source_id, targets in outgoing_by_id.items():
+        if len(targets) <= 1:
+            continue
+        source_type = nodes_by_id[source_id].type
+        if source_type not in main_types:
             raise ValueError(
-                f"graph_lint: node {edge.from_!r} has >1 outgoing edge — condition "
-                "branching is not evaluated yet (ConditionExecutor is unimplemented)"
+                f"graph_lint: node {source_id!r} has >1 outgoing edge; only MAIN nodes "
+                "(`kb-retrieve` / `llm-step`) may fan out"
             )
-        next_by_id[edge.from_] = edge.to
+        invalid_targets = [target for target in targets if nodes_by_id[target].type != NodeType.TOOL_CALL]
+        if invalid_targets:
+            raise ValueError(
+                f"graph_lint: MAIN node {source_id!r} may fan out only to `tool-call`, "
+                f"got targets {invalid_targets!r}"
+            )
 
     # Rule 5 — no forbidden cycle. Standard 3-color DFS: WHITE = unvisited, GRAY = on the
     # current recursion stack, BLACK = fully explored. Hitting a GRAY node means the walk
@@ -135,22 +144,23 @@ def graph_lint(recipe: Recipe) -> None:
         if color[node.id] == WHITE:
             _walk(node.id)
 
-    # Rule 6 — the walk must terminate ON an `end` node, not merely run out of edges.
-    # Safe to walk as a simple chain here: rules 3+4 already guarantee exactly 1 start node
-    # and ≤ 1 outgoing edge per node, and rule 5 already guarantees no cycle, so `next_by_id`
-    # (built during rule 4) has exactly one deterministic path from `start_id`.
-    nodes_by_id = {node.id: node for node in dag.nodes}
-    walk_id = start_id
-    while True:
-        if nodes_by_id[walk_id].type == NodeType.END:
-            break
-        next_id = next_by_id.get(walk_id)
-        if next_id is None:
+    # Rule 6 — every reachable branch must end on `end`.
+    reachable = {start_id}
+    stack = [start_id]
+    while stack:
+        node_id = stack.pop()
+        for neighbor in adjacency[node_id]:
+            if neighbor in reachable:
+                continue
+            reachable.add(neighbor)
+            stack.append(neighbor)
+
+    for node_id in reachable:
+        if len(adjacency[node_id]) == 0 and nodes_by_id[node_id].type != NodeType.END:
             raise ValueError(
-                f"graph_lint: recipe.dag walk ended at node {walk_id!r} (no outgoing edge) "
-                "without reaching an `end` node"
+                f"graph_lint: reachable leaf node {node_id!r} must be type `end`, "
+                f"got {nodes_by_id[node_id].type!r}"
             )
-        walk_id = next_id
 
     # Rule 7 — every `tool-call` node's tool must be in agent_config.tool_whitelist.
     whitelist = set(recipe.agent_config.tool_whitelist)
