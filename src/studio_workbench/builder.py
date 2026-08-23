@@ -190,12 +190,14 @@ def create_recipe_d4(
             },
         ),
         Node(id="n2", type=NodeType.LLM_STEP, params={"temperature": 0.0}),
+        Node(id="n3", type=NodeType.TOOL_CALL, params={"tool": "kb_search"}),
         Node(id="n4", type=NodeType.END, params={}),
     ]
 
     edges = [
         Edge(from_="n1", to="n2"),
-        Edge(from_="n2", to="n4"),
+        Edge(from_="n2", to="n3"),
+        Edge(from_="n3", to="n4"),
     ]
 
     return Recipe(

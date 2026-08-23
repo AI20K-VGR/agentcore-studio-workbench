@@ -231,3 +231,29 @@ def test_lint_rejects_walk_not_ending_at_end_node() -> None:
     )
     with pytest.raises(ValueError, match="end"):
         graph_lint(recipe)
+
+
+def test_lint_rejects_llm_step_with_multiple_outgoing_edges() -> None:
+    """KHÓA: node LLM_STEP with >1 outgoing edges (fan-out) is strictly rejected by rule 4."""
+    recipe = _valid_recipe().model_copy(
+        update={
+            "agent_config": AgentConfig(
+                instructions="x",
+                model="gpt-4o-mini",
+                tool_whitelist=["calculator", "current_datetime"],
+            ),
+            "dag": Dag(
+                nodes=[
+                    Node(id="n1", type=NodeType.LLM_STEP, params={}),
+                    Node(id="t1", type=NodeType.TOOL_CALL, params={"tool": "calculator"}),
+                    Node(id="t2", type=NodeType.TOOL_CALL, params={"tool": "current_datetime"}),
+                ],
+                edges=[
+                    Edge(from_="n1", to="t1", when=None),
+                    Edge(from_="n1", to="t2", when=None),
+                ],
+            ),
+        }
+    )
+    with pytest.raises(ValueError, match="outgoing edge"):
+        graph_lint(recipe)

@@ -93,27 +93,16 @@ def graph_lint(recipe: Recipe) -> None:
 
     nodes_by_id = {node.id: node for node in dag.nodes}
 
-    # Rule 4 — fan-out only from MAIN (`kb-retrieve` / `llm-step`) to `tool-call` targets.
-    # Everything else with >1 outgoing edge is rejected.
-    outgoing_by_id: dict[str, list[str]] = {}
+    # Rule 4 — exactly 0 or 1 outgoing edge per node (temporary stub until
+    # ConditionExecutor lands in AIE-1: see module docstring).
+    next_by_id: dict[str, str] = {}
     for edge in dag.edges:
-        outgoing_by_id.setdefault(edge.from_, []).append(edge.to)
-
-    main_types = {NodeType.KB_RETRIEVE, NodeType.LLM_STEP}
-    for source_id, targets in outgoing_by_id.items():
-        if len(targets) <= 1:
-            continue
-        source_type = nodes_by_id[source_id].type
-        if source_type not in main_types:
+        if edge.from_ in next_by_id:
             raise ValueError(
-                f"graph_lint: node {source_id!r} has >1 outgoing edge; only MAIN nodes "
-                "(`kb-retrieve` / `llm-step`) may fan out"
+                f"graph_lint: node {edge.from_!r} has >1 outgoing edge — condition "
+                "branching is not evaluated yet (ConditionExecutor is unimplemented)"
             )
-        invalid_targets = [target for target in targets if nodes_by_id[target].type != NodeType.TOOL_CALL]
-        if invalid_targets:
-            raise ValueError(
-                f"graph_lint: MAIN node {source_id!r} may fan out only to `tool-call`, got targets {invalid_targets!r}"
-            )
+        next_by_id[edge.from_] = edge.to
 
     # Rule 5 — no forbidden cycle. Standard 3-color DFS: WHITE = unvisited, GRAY = on the
     # current recursion stack, BLACK = fully explored. Hitting a GRAY node means the walk
@@ -143,22 +132,22 @@ def graph_lint(recipe: Recipe) -> None:
         if color[node.id] == WHITE:
             _walk(node.id)
 
-    # Rule 6 — every reachable branch must end on `end`.
-    reachable = {start_id}
-    stack = [start_id]
-    while stack:
-        node_id = stack.pop()
-        for neighbor in adjacency[node_id]:
-            if neighbor in reachable:
-                continue
-            reachable.add(neighbor)
-            stack.append(neighbor)
-
-    for node_id in reachable:
-        if len(adjacency[node_id]) == 0 and nodes_by_id[node_id].type != NodeType.END:
+    # Rule 6 — the walk must terminate ON an `end` node, not merely run out of edges.
+    # Safe to walk as a simple chain here: rules 3+4 already guarantee exactly 1 start node
+    # and <= 1 outgoing edge per node, and rule 5 already guarantees no cycle, so `next_by_id`
+    # (built during rule 4) has exactly one deterministic path from `start_id`.
+    nodes_by_id = {node.id: node for node in dag.nodes}
+    walk_id = start_id
+    while True:
+        if nodes_by_id[walk_id].type == NodeType.END:
+            break
+        next_id = next_by_id.get(walk_id)
+        if next_id is None:
             raise ValueError(
-                f"graph_lint: reachable leaf node {node_id!r} must be type `end`, got {nodes_by_id[node_id].type!r}"
+                f"graph_lint: recipe.dag walk ended at node {walk_id!r} (no outgoing edge) "
+                "without reaching an `end` node"
             )
+        walk_id = next_id
 
     # Rule 7 — every `tool-call` node's tool must be in agent_config.tool_whitelist.
     whitelist = set(recipe.agent_config.tool_whitelist)

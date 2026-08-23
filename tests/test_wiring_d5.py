@@ -44,7 +44,7 @@ async def test_workbench_recipe_emits_trace_events_via_interpreter() -> None:
     )
 
     assert result.run_id is not None
-    assert len(writer.events) == 3
+    assert len(writer.events) == 4
 
     # Verify that every trace event has matching run_id, agent_id, tenant_id
     for event in writer.events:
@@ -53,6 +53,6 @@ async def test_workbench_recipe_emits_trace_events_via_interpreter() -> None:
         assert event.tenant_id == recipe.tenant_id
         assert event.ts is not None
 
-    # Verify node execution sequence in trace events: n1 -> n2 -> n4
+    # Verify node execution sequence in trace events: n1 -> n2 -> n3 -> n4
     node_ids = [e.node_id for e in writer.events]
-    assert node_ids == ["n1", "n2", "n4"]
+    assert node_ids == ["n1", "n2", "n3", "n4"]
