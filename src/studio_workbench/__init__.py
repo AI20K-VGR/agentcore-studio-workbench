@@ -13,7 +13,6 @@ from studio_workbench.builder import (
     build_agent_config,
     create_dynamic_recipe,
     create_recipe_d4,
-    create_recipe_d6,
 )
 from studio_workbench.canvas import recipe_from_canvas
 from studio_workbench.publish import publish, recipe_hash, rollback
@@ -26,7 +25,6 @@ __all__ = [
     "build_agent_config",
     "create_dynamic_recipe",
     "create_recipe_d4",
-    "create_recipe_d6",
     "graph_lint",
     "publish",
     "recipe_from_canvas",

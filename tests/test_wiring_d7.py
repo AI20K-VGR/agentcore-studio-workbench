@@ -14,10 +14,10 @@ from collections.abc import Sequence
 from uuid import UUID
 
 import pytest
-from studio_contracts import EmbeddingService, TraceEvent
+from studio_contracts import Edge, EmbeddingService, Node, NodeType, TraceEvent
 from studio_engine.interpreter import run
 
-from studio_workbench import create_recipe_d6
+from studio_workbench import create_dynamic_recipe, create_recipe_d4
 from studio_workbench.tenant_wall import ResolvedContext
 
 ANKOR_ID = UUID("a0000000-0000-0000-0000-000000000001")
@@ -58,7 +58,7 @@ class _RecordingTraceWriter:
 
 def test_agent_config_has_all_three_fields() -> None:
     """DoD 3: Verify Recipe.agent_config exposes all 3 required fields."""
-    recipe = create_recipe_d6(
+    recipe = create_recipe_d4(
         agent_id="agent-d7-full-config",
         tenant_id=ANKOR_ID,
         instructions="Bạn là trợ lý AI tra cứu Callisto.",
@@ -66,7 +66,6 @@ def test_agent_config_has_all_three_fields() -> None:
         tool_whitelist=["kb_search", "sql_query_tool"],
         kb_id="kb-callisto-v1",
         scope="ankor/public, hr",
-        query="Bảo mật dữ liệu Callisto như thế nào?",
     )
 
     # 1. instructions
@@ -91,15 +90,33 @@ async def test_protocol_cleanliness_gateway_embedding_without_interpreter_change
     from studio_engine.demo_stubs import FixtureLLM
     from studio_kb import StaticKbSearch
 
-    recipe = create_recipe_d6(
+    # Dựng tường minh qua create_dynamic_recipe (không qua create_recipe_d4/d6): DoD của bài này
+    # là DIP/Protocol wiring của `embedding`, không phải shape DAG của một builder cụ thể — 4 node
+    # rõ ràng ở đây giữ đúng assertion n1..n4 + 4 trace event bên dưới, độc lập khỏi việc
+    # create_recipe_d4/d6 sinh bao nhiêu node (workbench#31 đã bỏ node tool-call chết khỏi cả hai).
+    recipe = create_dynamic_recipe(
         agent_id="agent-d7-dip-test",
         tenant_id=ANKOR_ID,
         instructions="Tra cứu chính sách nghỉ phép.",
         model="gemini-2.5-flash",
-        tool_whitelist=["kb_search"],
+        tool_whitelist=["calculator"],
         kb_id="kb-callisto-v1",
         scope="ankor/public",
-        query="Nhân viên xin nghỉ phép cần báo trước bao lâu?",
+        nodes=[
+            Node(
+                id="n1",
+                type=NodeType.KB_RETRIEVE,
+                params={"query": "Nhân viên xin nghỉ phép cần báo trước bao lâu?", "top_k": 3},
+            ),
+            Node(id="n2", type=NodeType.LLM_STEP, params={"temperature": 0.0}),
+            Node(id="n3", type=NodeType.TOOL_CALL, params={"tool": "calculator"}),
+            Node(id="n4", type=NodeType.END, params={}),
+        ],
+        edges=[
+            Edge(from_="n1", to="n2"),
+            Edge(from_="n2", to="n3"),
+            Edge(from_="n3", to="n4"),
+        ],
     )
 
     mock_gateway_embedding = MockGatewayEmbedding(dimension=768)

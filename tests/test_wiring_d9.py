@@ -6,25 +6,32 @@ production feature is added here (day-09 constraint: "Khong them feature moi - c
 harden") - this file only adds test coverage over existing builder.py / tenant_wall.py.
 
 Validates:
-1. form -> recipe valid (happy path) via create_recipe_d6() and create_dynamic_recipe().
+1. form -> recipe valid (happy path) via create_dynamic_recipe().
 2. Recipe construction rejects when a required field is missing (pydantic ValidationError) -
    for Recipe itself, and for its nested AgentConfig / KbBinding sub-models.
 3. Form-level builders reject missing required inputs too (TypeError / ValueError) -
    these must be *real* errors, not silently-swallowed defaults.
 4. INV-1 (tenant_wall) hardening: additional fail-closed edge cases not covered by
-   test_wiring_d8.py, plus a builder-side test proving create_recipe_d6() has no side
+   test_wiring_d8.py, plus a builder-side test proving create_dynamic_recipe() has no side
    channel for tenant_id to arrive through besides its one explicit keyword.
 
    NOTE (post-review, PR#9 review): a prior version of this file's Group 3 also carried
    an "end-to-end INV-1" test that asserted resolve_session() then substituted the
-   result into the form dict itself before calling create_recipe_d6() - the substitution
+   result into the form dict itself before calling the builder - the substitution
    was the test's own code, not anything in src/, so it passed even against a builder
    mutated to hardcode its tenant. There is no src/ caller wiring resolve_session() into
-   create_recipe_d6() (workbench and studio_engine are import-linter sibling layers, so
+   any builder (workbench and studio_engine are import-linter sibling layers, so
    workbench cannot be the composition root); the real INV-1 decision point is
    interpreter.run() at the composition root, covered by
    agentcore-studio-app#2::test_inv1_recipe_khai_tenant_khac_thi_session_thang. This file
-   only owns the builder half now: proving create_recipe_d6() itself has no back door.
+   only owns the builder half now: proving create_dynamic_recipe() itself has no back door.
+
+   UPDATE 2026-08-24 (workbench#31 follow-up cleanup): `create_recipe_d6` — the other
+   Form-Feed builder this file used to test in parallel — removed (0 production caller).
+   `create_dynamic_recipe` is now the one Form-Feed builder left, and the "no defaults /
+   no side channel" invariants below (previously proven for both builders) are proven
+   for it alone; nothing d6-specific survives migration (its coverage was a byte-for-byte
+   duplicate of the create_dynamic_recipe assertions in the same groups below).
 
 Owner: SWE (Thieu Quang Minh). Day 9 - Sprint 1 Chang 1 Tuan 2.
 """
@@ -45,24 +52,25 @@ from studio_contracts import (
     ScorecardThreshold,
 )
 
-from studio_workbench import create_dynamic_recipe, create_recipe_d6
+from studio_workbench import create_dynamic_recipe
 from studio_workbench.tenant_wall import resolve_session, resolve_tenant_id
 
 ANKOR_ID = UUID("a0000000-0000-0000-0000-000000000001")
 OTHER_ID = UUID("b0000000-0000-0000-0000-000000000002")
 
 
-def _valid_form_data() -> dict[str, object]:
-    """A well-formed Form UI submission (all fields present)."""
+def _valid_dynamic_form_data() -> dict[str, object]:
+    """A well-formed Form UI submission for create_dynamic_recipe() (all fields present)."""
     return dict(
         agent_id="agent-form-d9",
         tenant_id=ANKOR_ID,
         instructions="Tra cuu chinh sach nghi phep nam.",
         model="gemini-2.5-flash",
         tool_whitelist=["kb_search"],
+        nodes=[Node(id="n1", type=NodeType.END, params={})],
+        edges=[],
         kb_id="kb-hr-v1",
         scope="ankor/hr",
-        query="Nhan vien duoc nghi phep bao nhieu ngay?",
     )
 
 
@@ -84,20 +92,6 @@ def _base_recipe_kwargs() -> dict[str, object]:
 # ===========================================================================
 # Group 1 -- form -> recipe valid (happy path)
 # ===========================================================================
-
-
-def test_form_to_recipe_valid_via_create_recipe_d6() -> None:
-    """DoD: a fully-filled form submitted to create_recipe_d6() yields a valid Recipe."""
-    form_data = _valid_form_data()
-
-    recipe = create_recipe_d6(**form_data)  # type: ignore[arg-type]
-
-    assert isinstance(recipe, Recipe)
-    assert recipe.agent_id == "agent-form-d9"
-    assert recipe.tenant_id == ANKOR_ID
-    assert recipe.agent_config.model == "gemini-2.5-flash"
-    assert recipe.kb_binding.kb_id == "kb-hr-v1"
-    assert recipe.kb_binding.scope == "ankor/hr"
 
 
 def test_form_to_recipe_valid_via_create_dynamic_recipe() -> None:
@@ -184,21 +178,21 @@ def test_kb_binding_missing_required_field_is_rejected(missing_field: str) -> No
         "instructions",
         "model",
         "tool_whitelist",
-        "kb_id",
-        "scope",
-        "query",
+        "nodes",
+        "edges",
     ],
 )
-def test_create_recipe_d6_missing_required_form_field_is_rejected(missing_field: str) -> None:
-    """DoD: create_recipe_d6() (the Form Feed entrypoint) has NO defaults for its core
-    params - omitting any one of them must fail loudly with TypeError, not silently
-    fall back to a hidden default.
-    """
-    form_data = _valid_form_data()
+def test_create_dynamic_recipe_missing_required_form_field_is_rejected(missing_field: str) -> None:
+    """DoD: create_dynamic_recipe() (the Form Feed entrypoint, since create_recipe_d6's removal
+    at workbench#31 follow-up) has NO defaults for its core params - omitting any one of them
+    must fail loudly with TypeError, not silently fall back to a hidden default. `kb_id`/`scope`
+    covered separately below (they default to `None` and are rejected with `ValueError` instead,
+    by explicit check in the builder body, not by parameter absence)."""
+    form_data = _valid_dynamic_form_data()
     del form_data[missing_field]
 
     with pytest.raises(TypeError):
-        create_recipe_d6(**form_data)  # type: ignore[arg-type]
+        create_dynamic_recipe(**form_data)  # type: ignore[arg-type]
 
 
 def test_create_dynamic_recipe_missing_kb_id_is_rejected() -> None:
@@ -275,23 +269,24 @@ def test_resolve_session_filters_blank_entries_out_of_roles_list() -> None:
     assert ctx.roles == ["hr", "finance"]
 
 
-def test_create_recipe_d6_rejects_unexpected_tenant_like_keys() -> None:
-    """Harden (builder-side): create_recipe_d6() has no side channel for a tenant to
+def test_create_dynamic_recipe_rejects_unexpected_tenant_like_keys() -> None:
+    """Harden (builder-side): create_dynamic_recipe() has no side channel for a tenant to
     arrive through besides its one explicit `tenant_id` keyword.
 
     Replaces a prior test that claimed to lock INV-1 end-to-end but didn't: it built an
     "attacker" form dict, then substituted the session-resolved tenant into that same
-    dict *inside the test body* before calling create_recipe_d6(), and asserted the
+    dict *inside the test body* before calling the builder, and asserted the
     substitution it had just performed. The substitution was the fence, and it lived in
-    the test, not in src/ - a create_recipe_d6() mutated to hardcode its tenant (ignoring
+    the test, not in src/ - a builder mutated to hardcode its tenant (ignoring
     the tenant_id argument entirely) still passed that test. See PR#9 review for the
     mutation that demonstrated this.
 
-    What this test locks instead: create_recipe_d6() takes named parameters with no
-    **kwargs catch-all (builder.py:196), so any extra tenant-shaped key in a form
-    payload - "tenant", "tenant_slug", or anything else not spelled `tenant_id` - MUST
-    blow up as TypeError, not get silently accepted or silently preferred over the real
-    `tenant_id`. That's a real, exercisable property of this function.
+    What this test locks instead: create_dynamic_recipe() takes named parameters with no
+    **kwargs catch-all, so any extra tenant-shaped key in a form payload - "tenant",
+    "tenant_slug", or anything else not spelled `tenant_id` - MUST blow up as TypeError,
+    not get silently accepted or silently preferred over the real `tenant_id`. That's a
+    real, exercisable property of this function. (Migrated from `create_recipe_d6`,
+    removed at workbench#31 follow-up cleanup — same invariant, same fence, one builder.)
 
     What this test does NOT claim: that the *caller* correctly resolves the session
     before calling this builder (that's an API-boundary responsibility, not the
@@ -301,9 +296,9 @@ def test_create_recipe_d6_rejects_unexpected_tenant_like_keys() -> None:
     interpreter.run(), covered by
     agentcore-studio-app#2::test_inv1_recipe_khai_tenant_khac_thi_session_thang.
     """
-    form_data = _valid_form_data()
+    form_data = _valid_dynamic_form_data()
     form_data["tenant"] = OTHER_ID  # not a real param - must not be silently accepted
     form_data["tenant_slug"] = "borea"  # ditto
 
     with pytest.raises(TypeError, match="unexpected keyword argument"):
-        create_recipe_d6(**form_data)  # type: ignore[arg-type]
+        create_dynamic_recipe(**form_data)  # type: ignore[arg-type]
