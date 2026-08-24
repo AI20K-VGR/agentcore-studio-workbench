@@ -140,7 +140,7 @@ def test_legacy_builders_compatibility() -> None:
     """
     r4 = create_recipe_d4(agent_id="d4-agent")
     assert r4.agent_id == "d4-agent"
-    assert len(r4.dag.nodes) == 4
+    assert len(r4.dag.nodes) == 3
 
     r6 = create_recipe_d6(
         agent_id="d6-agent",

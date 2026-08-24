@@ -14,15 +14,25 @@ engine (AIE-1) interpreter — "recipe không qua validator = không interpret" 
 3. **exactly 1 start node** — exactly one node id must have no incoming edge (`edge.to`); 0 or
    >1 candidates means the DAG doesn't describe a single walkable chain and the interpreter
    would have no unambiguous place to begin.
-4. **fan-out is only allowed from MAIN nodes to `tool-call`** — a node with >1 outgoing edges is
-    allowed only when that node is `kb-retrieve` or `llm-step` (MAIN), and every outgoing target is
-    `tool-call`. This models Workbench's hub-spoke authoring mode: MAIN node in the center, multiple
-    tool-call satellites around it. Any other multi-outgoing pattern is rejected.
+4. **every node has ≤ 1 outgoing edge** — TEMPORARY, tied to AIE-1's `ConditionExecutor`
+   progress (kit#87 issue thread, 2026-08-04): the interpreter cannot yet evaluate `condition`
+   branching (`Edge.when`), so a node with >1 outgoing edge would let a recipe reach the
+   interpreter with a branch it cannot walk. This rejects EVERY recipe with real `condition`
+   branching, including structurally valid ones, until `ConditionExecutor` is implemented — at
+   which point this rule must be relaxed to allow `condition` nodes to fan out. AIE-1 owns
+   the signal for when that is; do not relax unilaterally. First real invocation of this
+   signal: kit#206 (2026-08-24) — canvas Hub-and-Spoke fan-out was proposed and AIE-1 (Trần
+   Bá Đạt) confirmed **keep this rule blocking**: `engine#36`'s `run_agent_loop()` picks tools
+   at runtime from the whitelist/registry via a `TOOL_CALL:` signal, not from DAG fan-out
+   edges, so a fan-out edge is the wrong mechanism for representing "1 LLM + N tools" — not
+   merely "correct but not yet implemented". Hub-and-Spoke stays a canvas-layout concept; the
+   exported DAG stays linear. See `docs/decisions/recipe.md` ADR-D24-01.
 5. **no forbidden cycle** — the DAG (`recipe.dag.nodes` + `recipe.dag.edges`) must not contain a
    cycle; a cyclic recipe must never reach the interpreter (R-SPEC A1#1 turing-completeness cap).
-6. **every branch terminates ON an `end` node** — from the single start node, every reachable path
-    must eventually end at a node of type `NodeType.END`. Any reachable leaf node that is not `end`
-    is rejected.
+6. **the walk terminates ON an `end` node** — starting from the single start node and following
+   each node's (at most one) outgoing edge, the chain must reach a node of type
+   `NodeType.END`. Running out of edges before hitting an `end` node is rejected; an `end` node
+   being merely reachable but not on the walked chain does not satisfy this rule.
 7. **tool ∈ `tool_whitelist`** — every tool referenced by a `tool-call` node (its `params["tool"]`)
    must be present in `recipe.agent_config.tool_whitelist`; a tool outside the whitelist is
    rejected.
@@ -43,7 +53,7 @@ from studio_contracts import NodeType, Recipe
 
 
 def graph_lint(recipe: Recipe) -> None:
-    """Validate `recipe`'s DAG against the 4 rules documented above.
+    """Validate `recipe`'s DAG against the 7 rules documented above.
 
     Raises `ValueError` on the first violation found (never returns a boolean/error-list —
     a recipe either passes cleanly or it does not reach the interpreter at all). Returns
@@ -90,8 +100,6 @@ def graph_lint(recipe: Recipe) -> None:
             f"found {len(start_ids)}: {start_ids}"
         )
     start_id = start_ids[0]
-
-    nodes_by_id = {node.id: node for node in dag.nodes}
 
     # Rule 4 — exactly 0 or 1 outgoing edge per node (temporary stub until
     # ConditionExecutor lands in AIE-1: see module docstring).
