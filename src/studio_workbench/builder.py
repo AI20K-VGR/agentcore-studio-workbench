@@ -159,7 +159,13 @@ def create_recipe_d4(
     the declared KB scope to `kb.search`.
     """
     if tool_whitelist is None:
-        tool_whitelist = ["kb_search"]
+        # Review vòng 2 web#33 (dholmes0207, nit): default KHÔNG còn được `["kb_search"]` từ khi
+        # workbench#31 xoá node tool-call{kb_search} khỏi DAG này — không có node tool-call nào
+        # tiêu thụ giá trị này nữa. Giữ `["kb_search"]` là một cái bẫy chết: ai thêm lại 1 node
+        # tool-call vào d4 sau này sẽ thừa kế đúng `kb_search` làm default hợp lý-nhìn-vào, tức
+        # dựng lại nguyên văn bug workbench#31 vừa xoá. `[]` đóng cửa đó — không tool nào được
+        # whitelist ngầm định cho một recipe không khai node tool-call nào.
+        tool_whitelist = []
 
     t_id = tenant_id if isinstance(tenant_id, UUID) else UUID(tenant_id)
 
