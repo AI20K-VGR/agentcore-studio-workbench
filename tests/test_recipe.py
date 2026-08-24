@@ -1,4 +1,4 @@
-"""Test suite for studio_workbench.builder module and create_dynamic_recipe function.
+"""Test suite for studio_workbench.recipe module and create_recipe function.
 
 Tests dynamic recipe creation with 2-node, 3-node, and N-node DAGs, as well as
 compatibility with interpreter.run().
@@ -13,7 +13,7 @@ from studio_engine.interpreter import run
 from studio_workbench import (
     ANKOR_ID,
     build_agent_config,
-    create_dynamic_recipe,
+    create_recipe,
     create_recipe_d4,
 )
 from studio_workbench.tenant_wall import ResolvedContext
@@ -25,14 +25,16 @@ def test_build_agent_config() -> None:
         instructions="System instructions",
         model="gemini-2.5-flash",
         tool_whitelist=["kb_search"],
+        temperature=0.5,
     )
     assert config.instructions == "System instructions"
     assert config.model == "gemini-2.5-flash"
     assert config.tool_whitelist == ["kb_search"]
+    assert config.temperature == 0.5
 
 
-def test_create_dynamic_recipe_2_nodes() -> None:
-    """Test building a dynamic recipe with 2 nodes (LLM_STEP -> END)."""
+def test_create_recipe_2_nodes() -> None:
+    """Test building a recipe with 2 nodes (LLM_STEP -> END)."""
     nodes = [
         Node(id="n1", type=NodeType.LLM_STEP, params={"temperature": 0.5}),
         Node(id="n2", type=NodeType.END, params={}),
@@ -41,20 +43,20 @@ def test_create_dynamic_recipe_2_nodes() -> None:
         Edge(from_="n1", to="n2"),
     ]
 
-    recipe = create_dynamic_recipe(
+    recipe = create_recipe(
         agent_id="agent-2-nodes",
         tenant_id=ANKOR_ID,
         instructions="Direct LLM chat without KB",
-        model="gemini-2.5-flash",
         tool_whitelist=[],
-        kb_id="kb-callisto-v1",
-        scope="ankor/public",
         nodes=nodes,
         edges=edges,
+        temperature=0.3,
     )
 
     assert recipe.agent_id == "agent-2-nodes"
     assert recipe.tenant_id == ANKOR_ID
+    assert recipe.agent_config.model == "gemini-2.5-flash"
+    assert recipe.agent_config.temperature == 0.3
     assert len(recipe.dag.nodes) == 2
     assert len(recipe.dag.edges) == 1
     assert recipe.dag.nodes[0].type == NodeType.LLM_STEP
@@ -62,45 +64,12 @@ def test_create_dynamic_recipe_2_nodes() -> None:
     assert recipe.kb_binding is not None
     assert recipe.kb_binding.kb_id == "kb-callisto-v1"
     assert recipe.kb_binding.scope == "ankor/public"
+    assert recipe.scorecard_threshold.success == 0.9
+    assert recipe.scorecard_threshold.citation_accuracy == 0.95
 
 
-def test_create_dynamic_recipe_missing_kb_or_scope_raises() -> None:
-    """Test that missing or empty kb_id or scope raises ValueError."""
-    nodes = [
-        Node(id="n1", type=NodeType.LLM_STEP, params={}),
-        Node(id="n2", type=NodeType.END, params={}),
-    ]
-    edges = [Edge(from_="n1", to="n2")]
-
-    with pytest.raises(ValueError, match="Cần truyền đầy đủ 'kb_id' và 'scope'"):
-        create_dynamic_recipe(
-            agent_id="agent-err",
-            tenant_id=ANKOR_ID,
-            instructions="inst",
-            model="gemini-2.5-flash",
-            tool_whitelist=[],
-            nodes=nodes,
-            edges=edges,
-            kb_id=None,
-            scope=None,
-        )
-
-    with pytest.raises(ValueError, match="Cần truyền đầy đủ 'kb_id' và 'scope'"):
-        create_dynamic_recipe(
-            agent_id="agent-err",
-            tenant_id=ANKOR_ID,
-            instructions="inst",
-            model="gemini-2.5-flash",
-            tool_whitelist=[],
-            nodes=nodes,
-            edges=edges,
-            kb_id="",
-            scope="",
-        )
-
-
-def test_create_dynamic_recipe_3_nodes_with_kb() -> None:
-    """Test building a dynamic recipe with 3 nodes (KB_RETRIEVE -> LLM_STEP -> END) and KB binding."""
+def test_create_recipe_3_nodes_with_kb() -> None:
+    """Test building a recipe with 3 nodes (KB_RETRIEVE -> LLM_STEP -> END) and hardcoded KB binding."""
     nodes = [
         Node(id="n1", type=NodeType.KB_RETRIEVE, params={"query": "Callisto policy"}),
         Node(id="n2", type=NodeType.LLM_STEP, params={"temperature": 0.0}),
@@ -111,14 +80,11 @@ def test_create_dynamic_recipe_3_nodes_with_kb() -> None:
         Edge(from_="n2", to="n3"),
     ]
 
-    recipe = create_dynamic_recipe(
+    recipe = create_recipe(
         agent_id="agent-3-nodes-kb",
         tenant_id=ANKOR_ID,
         instructions="Search KB then answer",
-        model="gemini-2.5-flash",
         tool_whitelist=["kb_search"],
-        kb_id="kb-callisto-v1",
-        scope="ankor/public",
         nodes=nodes,
         edges=edges,
     )
@@ -126,6 +92,7 @@ def test_create_dynamic_recipe_3_nodes_with_kb() -> None:
     assert recipe.agent_id == "agent-3-nodes-kb"
     assert len(recipe.dag.nodes) == 3
     assert len(recipe.dag.edges) == 2
+    assert recipe.agent_config.temperature == 0.7
     assert recipe.kb_binding is not None
     assert recipe.kb_binding.kb_id == "kb-callisto-v1"
     assert recipe.kb_binding.scope == "ankor/public"
@@ -137,7 +104,7 @@ def test_legacy_builders_compatibility() -> None:
     `create_recipe_d3`/`create_sample_recipe_d3` removed (day21 cleanup) — 0 caller ngoài
     `packages/workbench` (đã kiểm kê toàn repo), hành vi là tập con thật sự của `create_recipe_d4`.
     `create_recipe_d6` removed cùng lý do (workbench#31 follow-up) — 0 caller production, chỉ tự
-    tham chiếu trong test của chính package; `create_dynamic_recipe` là builder Form-Feed còn lại.
+    tham chiếu trong test của chính package; `create_recipe` là builder Form-Feed còn lại.
     """
     r4 = create_recipe_d4(agent_id="d4-agent")
     assert r4.agent_id == "d4-agent"
@@ -156,14 +123,11 @@ def test_default_golden_set_ref_points_to_golden_30() -> None:
     ]
     edges = [Edge(from_="n1", to="n2")]
 
-    r_dynamic = create_dynamic_recipe(
+    r_dynamic = create_recipe(
         agent_id="agent-golden-ref-check",
         tenant_id=ANKOR_ID,
         instructions="inst",
-        model="gemini-2.5-flash",
         tool_whitelist=[],
-        kb_id="kb-callisto-v1",
-        scope="ankor/public",
         nodes=nodes,
         edges=edges,
     )
@@ -181,8 +145,8 @@ class _NoOpTraceWriter:
 
 
 @pytest.mark.asyncio
-async def test_dynamic_recipe_wiring_to_interpreter() -> None:
-    """Test wiring: passing a 2-node dynamic recipe into engine's interpreter.run()."""
+async def test_recipe_wiring_to_interpreter() -> None:
+    """Test wiring: passing a 2-node recipe into engine's interpreter.run()."""
     from studio_engine.demo_stubs import EmptyEmbedding, EmptyKbSearch, FixtureLLM
 
     nodes = [
@@ -193,14 +157,11 @@ async def test_dynamic_recipe_wiring_to_interpreter() -> None:
         Edge(from_="n1", to="n2"),
     ]
 
-    recipe = create_dynamic_recipe(
+    recipe = create_recipe(
         agent_id="agent-2-nodes-wiring",
         tenant_id=ANKOR_ID,
         instructions="Direct answer",
-        model="gemini-2.5-flash",
         tool_whitelist=[],
-        kb_id="kb-callisto-v1",
-        scope="ankor/public",
         nodes=nodes,
         edges=edges,
     )
@@ -217,3 +178,4 @@ async def test_dynamic_recipe_wiring_to_interpreter() -> None:
     assert result.run_id is not None
     assert "n1" in result.final_state
     assert "n2" in result.final_state
+

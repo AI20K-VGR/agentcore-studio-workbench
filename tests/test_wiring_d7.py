@@ -17,7 +17,7 @@ import pytest
 from studio_contracts import Edge, EmbeddingService, Node, NodeType, TraceEvent
 from studio_engine.interpreter import run
 
-from studio_workbench import create_dynamic_recipe, create_recipe_d4
+from studio_workbench import create_recipe, create_recipe_d4
 from studio_workbench.tenant_wall import ResolvedContext
 
 ANKOR_ID = UUID("a0000000-0000-0000-0000-000000000001")
@@ -90,18 +90,15 @@ async def test_protocol_cleanliness_gateway_embedding_without_interpreter_change
     from studio_engine.demo_stubs import FixtureLLM
     from studio_kb import StaticKbSearch
 
-    # Dựng tường minh qua create_dynamic_recipe (không qua create_recipe_d4/d6): DoD của bài này
+    # Dựng tường minh qua create_recipe (không qua create_recipe_d4/d6): DoD của bài này
     # là DIP/Protocol wiring của `embedding`, không phải shape DAG của một builder cụ thể — 4 node
     # rõ ràng ở đây giữ đúng assertion n1..n4 + 4 trace event bên dưới, độc lập khỏi việc
     # create_recipe_d4/d6 sinh bao nhiêu node (workbench#31 đã bỏ node tool-call chết khỏi cả hai).
-    recipe = create_dynamic_recipe(
+    recipe = create_recipe(
         agent_id="agent-d7-dip-test",
         tenant_id=ANKOR_ID,
         instructions="Tra cứu chính sách nghỉ phép.",
-        model="gemini-2.5-flash",
         tool_whitelist=["calculator"],
-        kb_id="kb-callisto-v1",
-        scope="ankor/public",
         nodes=[
             Node(
                 id="n1",

@@ -12,7 +12,7 @@ from studio_contracts import Edge, Node, NodeType, TraceEvent
 from studio_engine.demo_stubs import EmptyEmbedding, EmptyKbSearch, FixtureLLM
 from studio_engine.interpreter import run
 
-from studio_workbench import create_dynamic_recipe, create_recipe_d4
+from studio_workbench import create_recipe, create_recipe_d4
 from studio_workbench.tenant_wall import ResolvedContext
 from studio_workbench.validator import graph_lint
 
@@ -63,7 +63,7 @@ async def test_workbench_recipe_emits_trace_events_via_interpreter() -> None:
 async def test_dynamic_recipe_tool_call_node_runs_via_interpreter() -> None:
     """Real end-to-end coverage for `ToolCallExecutor`/rule 7, kept alive after kit#206 (ADR-D24-01):
     once `create_recipe_d4`/`create_recipe_d6` stopped emitting a `tool-call` node (workbench#31),
-    no builder-produced recipe exercised the interpreter's `tool-call` path anymore. `create_dynamic_recipe`
+    no builder-produced recipe exercised the interpreter's `tool-call` path anymore. `create_recipe`
     is the one builder that still lets a canvas admin declare a real `tool-call` node (a *whitelisted*
     tool, `calculator` — never `kb_search`, see workbench#31), so this locks that path stays wired:
     `graph_lint` accepts a single-path `kb-retrieve -> llm-step -> tool-call -> end` DAG (rule 4 still
@@ -80,14 +80,11 @@ async def test_dynamic_recipe_tool_call_node_runs_via_interpreter() -> None:
         Edge(from_="n2", to="n3"),
         Edge(from_="n3", to="n4"),
     ]
-    recipe = create_dynamic_recipe(
+    recipe = create_recipe(
         agent_id="agent-tool-call-coverage",
         tenant_id=_ANKOR_ID,
         instructions="x",
-        model="gemini-2.5-flash",
         tool_whitelist=["calculator"],
-        kb_id="kb-callisto-v1",
-        scope="ankor/public",
         nodes=nodes,
         edges=edges,
     )

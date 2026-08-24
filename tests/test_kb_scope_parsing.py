@@ -26,7 +26,7 @@ from studio_contracts import TraceEvent
 from studio_engine.interpreter import run
 
 from studio_workbench import create_recipe_d4
-from studio_workbench.builder import _parse_kb_scope
+from studio_workbench.recipe import _parse_kb_scope
 from studio_workbench.tenant_wall import ResolvedContext
 
 ANKOR_ID = UUID("a0000000-0000-0000-0000-000000000001")

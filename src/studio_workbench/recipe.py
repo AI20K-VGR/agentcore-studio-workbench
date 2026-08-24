@@ -10,8 +10,13 @@ swe-day21-user-flow-diagrams.md` cho evidence đầy đủ.
 `create_recipe_d6` (Day 6 Form-Feed builder) removed 2026-08-24 (workbench#31 follow-up cleanup)
 — kiểm kê toàn repo xác nhận 0 caller production (`apps/studio`, `packages/kb`), chỉ còn tự tham
 chiếu trong test của chính package + 1 script rời `scripts/smoke_eval_d6.py` (gốc kit,
-đóng băng từ D7, không nằm trong CI nào). `create_dynamic_recipe` là builder Form-Feed thật còn
-lại — nó đã luôn có đủ tính chất "no hardcoded defaults" mà `create_recipe_d6` từng cung cấp.
+đóng băng từ D7, không nằm trong CI nào). `create_recipe` (trước đây `create_dynamic_recipe`)
+là builder Form-Feed thật còn lại.
+
+`create_recipe` (đổi tên từ `create_dynamic_recipe`): `model`, `kb_id`/`scope`,
+`success_threshold`/`citation_accuracy_threshold` không còn là tham số động — cố định trong
+hàm (quyết định nền tảng, không cho client tùy chỉnh). `temperature` là tham số động mới,
+input thật của người dùng, forward vào `AgentConfig`.
 """
 
 from __future__ import annotations
@@ -95,45 +100,54 @@ def build_agent_config(
     instructions: str,
     model: str,
     tool_whitelist: list[str],
+    temperature: float = 0.7,
 ) -> AgentConfig:
     """Tạo đối tượng AgentConfig chuẩn Pydantic v0 từ dữ liệu Form UI nhập vào."""
     return AgentConfig(
         instructions=instructions,
         model=model,
         tool_whitelist=tool_whitelist,
+        temperature=temperature,
     )
 
 
-def create_dynamic_recipe(
+# Quyết định nền tảng cố định (không cho client tùy chỉnh) cho `create_recipe`: model, KB
+# binding, và ngưỡng eval không còn là tham số động — xem docstring module ở trên.
+_DEFAULT_MODEL = "gemini-2.5-flash"
+_DEFAULT_KB_ID = "kb-callisto-v1"
+_DEFAULT_SCOPE = "ankor/public"
+_DEFAULT_SUCCESS_THRESHOLD = 0.9
+_DEFAULT_CITATION_ACCURACY_THRESHOLD = 0.95
+
+
+def create_recipe(
     agent_id: str,
     tenant_id: UUID | str,
     instructions: str,
-    model: str,
     tool_whitelist: list[str],
     nodes: list[Node],
     edges: list[Edge],
-    kb_id: str | None = None,
-    scope: str | None = None,
+    temperature: float = 0.7,
     golden_set_ref: str = "callisto-golden-30-v1",
-    success_threshold: float = 0.9,
-    citation_accuracy_threshold: float = 0.95,
 ) -> Recipe:
     """Khởi tạo một Recipe động hoàn toàn từ danh sách Nodes và Edges do UI kéo thả truyền vào.
 
     Hỗ trợ số lượng node ngẫu nhiên (2 node, 3 node, hay N node) kết nối tùy ý dưới dạng đồ thị DAG.
+
+    `model`, KB binding (`kb_id`/`scope`), và ngưỡng eval (`success`/`citation_accuracy`) là
+    quyết định nền tảng cố định — không nhận từ client. `temperature` là input thật của
+    người dùng, tự nhập/tự cấu hình.
     """
     t_id = tenant_id if isinstance(tenant_id, UUID) else UUID(tenant_id)
 
     config = build_agent_config(
         instructions=instructions,
-        model=model,
+        model=_DEFAULT_MODEL,
         tool_whitelist=tool_whitelist,
+        temperature=temperature,
     )
 
-    if not kb_id or not scope:
-        raise ValueError("Cần truyền đầy đủ 'kb_id' và 'scope' (không rỗng) để tạo Recipe.")
-
-    kb_bind = KbBinding(kb_id=kb_id, scope=scope)
+    kb_bind = KbBinding(kb_id=_DEFAULT_KB_ID, scope=_DEFAULT_SCOPE)
 
     return Recipe(
         agent_id=agent_id,
@@ -143,8 +157,8 @@ def create_dynamic_recipe(
         kb_binding=kb_bind,
         golden_set_ref=golden_set_ref,
         scorecard_threshold=ScorecardThreshold(
-            success=success_threshold,
-            citation_accuracy=citation_accuracy_threshold,
+            success=_DEFAULT_SUCCESS_THRESHOLD,
+            citation_accuracy=_DEFAULT_CITATION_ACCURACY_THRESHOLD,
         ),
     )
 
@@ -226,6 +240,6 @@ __all__ = [
     "BOREA_ID",
     "_parse_kb_scope",
     "build_agent_config",
-    "create_dynamic_recipe",
+    "create_recipe",
     "create_recipe_d4",
 ]
