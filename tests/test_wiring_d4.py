@@ -27,11 +27,11 @@ _EDGES = [Edge(from_="n1", to="n2"), Edge(from_="n2", to="n4")]
 def test_build_agent_config_from_form_inputs() -> None:
     """Test that build_agent_config creates a valid Pydantic AgentConfig."""
     config = build_agent_config(
-        instructions="Hỗ trợ tra cứu quy định Callisto.",
+        system_prompt="Hỗ trợ tra cứu quy định Callisto.",
         model="gemini-2.5-flash",
         tool_whitelist=["kb_search"],
     )
-    assert config.instructions == "Hỗ trợ tra cứu quy định Callisto."
+    assert config.system_prompt == "Hỗ trợ tra cứu quy định Callisto."
     assert config.model == "gemini-2.5-flash"
     assert config.tool_whitelist == ["kb_search"]
 
@@ -43,7 +43,7 @@ def test_create_recipe_contains_kb_binding() -> None:
     recipe = create_recipe(
         agent_id="agent-callisto-01",
         tenant_id=ANKOR_ID,
-        instructions="Hỗ trợ tra cứu quy định Callisto.",
+        system_prompt="Hỗ trợ tra cứu quy định Callisto.",
         tool_whitelist=[],
         nodes=_NODES,
         edges=_EDGES,
@@ -77,7 +77,7 @@ async def test_wiring_recipe_to_interpreter_entry() -> None:
     recipe = create_recipe(
         agent_id="agent-callisto-d4",
         tenant_id=ANKOR_ID,
-        instructions="Tra cứu quy trình và bảo mật Callisto.",
+        system_prompt="Tra cứu quy trình và bảo mật Callisto.",
         tool_whitelist=[],
         nodes=_NODES,
         edges=_EDGES,

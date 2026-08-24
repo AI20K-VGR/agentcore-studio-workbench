@@ -3,7 +3,7 @@
 Validates:
 1. Protocol Inversion (DIP): Replacing StubEmbedding -> GatewayEmbedding without touching interpreter.
 2. Offline CI execution (Mock GatewayEmbedding / Provider Fakes).
-3. Interpreter reading full 3-field `agent_config` (`instructions`, `model`, `tool_whitelist`).
+3. Interpreter reading full 3-field `agent_config` (`system_prompt`, `model`, `tool_whitelist`).
 
 Owner: SWE (Thiệu Quang Minh).
 """
@@ -65,7 +65,7 @@ def test_agent_config_has_all_three_fields() -> None:
     recipe = create_recipe(
         agent_id="agent-d7-full-config",
         tenant_id=ANKOR_ID,
-        instructions="Bạn là trợ lý AI tra cứu Callisto.",
+        system_prompt="Bạn là trợ lý AI tra cứu Callisto.",
         tool_whitelist=["kb_search", "sql_query_tool"],
         nodes=[
             Node(id="n1", type=NodeType.KB_RETRIEVE, params={"top_k": 3}),
@@ -75,8 +75,8 @@ def test_agent_config_has_all_three_fields() -> None:
         edges=[Edge(from_="n1", to="n2"), Edge(from_="n2", to="n4")],
     )
 
-    # 1. instructions
-    assert recipe.agent_config.instructions == "Bạn là trợ lý AI tra cứu Callisto."
+    # 1. system_prompt
+    assert recipe.agent_config.system_prompt == "Bạn là trợ lý AI tra cứu Callisto."
     # 2. model
     assert recipe.agent_config.model == "gemini-2.5-flash"
     # 3. tool_whitelist
@@ -104,7 +104,7 @@ async def test_protocol_cleanliness_gateway_embedding_without_interpreter_change
     recipe = create_recipe(
         agent_id="agent-d7-dip-test",
         tenant_id=ANKOR_ID,
-        instructions="Tra cứu chính sách nghỉ phép.",
+        system_prompt="Tra cứu chính sách nghỉ phép.",
         tool_whitelist=["calculator"],
         nodes=[
             Node(

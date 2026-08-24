@@ -2,7 +2,7 @@
   "agent_id": "agent-callisto-d12",
   "tenant_id": "a0000000-0000-0000-0000-000000000001",
   "agent_config": {
-    "instructions": "Hãy tra cứu tài liệu Callisto và trả lời thắc mắc của người dùng.",
+    "system_prompt": "Hãy tra cứu tài liệu Callisto và trả lời thắc mắc của người dùng.",
     "model": "gemini-2.5-flash",
     "tool_whitelist": [
       "kb_search"

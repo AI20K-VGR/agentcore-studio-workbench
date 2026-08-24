@@ -33,7 +33,7 @@ def _valid_recipe() -> Recipe:
         agent_id="agent-1",
         tenant_id=ANKOR_ID,
         agent_config=AgentConfig(
-            instructions="Answer from KB only.",
+            system_prompt="Answer from KB only.",
             model="gpt-4o-mini",
             tool_whitelist=["kb_search"],
         ),
@@ -121,7 +121,7 @@ def test_lint_rejects_bad_graph() -> None:
     tool_violation = base.model_copy(
         update={
             "agent_config": AgentConfig(
-                instructions="x",
+                system_prompt="x",
                 model="gpt-4o-mini",
                 tool_whitelist=["allowed_tool"],
             ),
@@ -238,7 +238,7 @@ def test_lint_rejects_llm_step_with_multiple_outgoing_edges() -> None:
     recipe = _valid_recipe().model_copy(
         update={
             "agent_config": AgentConfig(
-                instructions="x",
+                system_prompt="x",
                 model="gpt-4o-mini",
                 tool_whitelist=["calculator", "current_datetime"],
             ),

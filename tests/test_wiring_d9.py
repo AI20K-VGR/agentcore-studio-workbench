@@ -64,7 +64,7 @@ def _valid_dynamic_form_data() -> dict[str, object]:
     return dict(
         agent_id="agent-form-d9",
         tenant_id=ANKOR_ID,
-        instructions="Tra cuu chinh sach nghi phep nam.",
+        system_prompt="Tra cuu chinh sach nghi phep nam.",
         tool_whitelist=["kb_search"],
         nodes=[Node(id="n1", type=NodeType.END, params={})],
         edges=[],
@@ -77,7 +77,7 @@ def _base_recipe_kwargs() -> dict[str, object]:
         agent_id="agent-d9",
         tenant_id=ANKOR_ID,
         agent_config=AgentConfig(
-            instructions="Tra cuu tai lieu.", model="gemini-2.5-flash", tool_whitelist=["kb_search"]
+            system_prompt="Tra cuu tai lieu.", model="gemini-2.5-flash", tool_whitelist=["kb_search"]
         ),
         dag=Dag(nodes=[Node(id="n1", type=NodeType.END, params={})], edges=[]),
         kb_binding=KbBinding(kb_id="kb-x", scope="ankor/public"),
@@ -98,7 +98,7 @@ def test_form_to_recipe_valid_via_create_recipe() -> None:
     recipe = create_recipe(
         agent_id="agent-dyn-d9",
         tenant_id=ANKOR_ID,
-        instructions="Tra cuu tai lieu Callisto.",
+        system_prompt="Tra cuu tai lieu Callisto.",
         tool_whitelist=["kb_search"],
         nodes=nodes,
         edges=[],
@@ -141,11 +141,11 @@ def test_recipe_missing_required_field_is_rejected(missing_field: str) -> None:
         Recipe(**kwargs)
 
 
-@pytest.mark.parametrize("missing_field", ["instructions", "model", "tool_whitelist"])
+@pytest.mark.parametrize("missing_field", ["system_prompt", "model", "tool_whitelist"])
 def test_agent_config_missing_required_field_is_rejected(missing_field: str) -> None:
     """DoD: nested AgentConfig also rejects a missing required field."""
     kwargs = {
-        "instructions": "Tra cuu tai lieu.",
+        "system_prompt": "Tra cuu tai lieu.",
         "model": "gemini-2.5-flash",
         "tool_whitelist": ["kb_search"],
     }
@@ -170,7 +170,7 @@ def test_kb_binding_missing_required_field_is_rejected(missing_field: str) -> No
     [
         "agent_id",
         "tenant_id",
-        "instructions",
+        "system_prompt",
         "tool_whitelist",
         "nodes",
         "edges",
