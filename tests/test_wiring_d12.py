@@ -67,7 +67,7 @@ def test_canvas_nodes_stay_inside_the_closed_six() -> None:
     assert all("from" in edge and "to" in edge for edge in payload["dag"]["edges"])
 
     recipe = recipe_from_canvas(payload)
-    assert [edge.from_ for edge in recipe.dag.edges] == ["n1", "n2", "n3"]
+    assert [edge.from_ for edge in recipe.dag.edges] == ["n1", "n2"]
 
 
 # ---------------------------------------------------------------------------
@@ -115,10 +115,17 @@ def test_rule_4_tool_outside_whitelist_is_rejected() -> None:
 
     Đây là case Inspector của canvas cố ý cho người dùng dựng được (dropdown có sẵn 1 lựa chọn
     ngoài whitelist) — để cổng fail-closed là thứ demo được, không phải thứ chỉ tồn tại trong test.
+
+    Fixture happy-path (từ `sampleGraph()`, kit#206 ADR-D24-01) không còn tự sinh node `tool-call`
+    nào — chèn tường minh 1 node vào giữa `n2 -> n4` cho riêng test này, giữ DAG hợp lệ về hình
+    dạng (đúng 1 start node, single-successor chain kết ở `end`) trước khi phá whitelist.
     """
     payload = _payload()
-    tool_node = next(node for node in payload["dag"]["nodes"] if node["type"] == "tool-call")
-    tool_node["params"]["tool"] = "tool_ngoai_whitelist"
+    payload["dag"]["nodes"].append({"id": "n3", "type": "tool-call", "params": {"tool": "tool_ngoai_whitelist"}})
+    edges = payload["dag"]["edges"]
+    edges[:] = [edge for edge in edges if not (edge["from"] == "n2" and edge["to"] == "n4")]
+    edges.append({"from": "n2", "to": "n3", "when": None})
+    edges.append({"from": "n3", "to": "n4", "when": None})
 
     with pytest.raises(ValueError, match="whitelist"):
         recipe_from_canvas(payload)
