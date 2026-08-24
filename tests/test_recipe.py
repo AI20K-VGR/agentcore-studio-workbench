@@ -178,4 +178,3 @@ async def test_recipe_wiring_to_interpreter() -> None:
     assert result.run_id is not None
     assert "n1" in result.final_state
     assert "n2" in result.final_state
-
