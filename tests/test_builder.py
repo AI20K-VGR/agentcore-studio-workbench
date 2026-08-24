@@ -15,7 +15,6 @@ from studio_workbench import (
     build_agent_config,
     create_dynamic_recipe,
     create_recipe_d4,
-    create_recipe_d6,
 )
 from studio_workbench.tenant_wall import ResolvedContext
 
@@ -133,27 +132,16 @@ def test_create_dynamic_recipe_3_nodes_with_kb() -> None:
 
 
 def test_legacy_builders_compatibility() -> None:
-    """Test that create_recipe_d4, d6 work properly from unified builder.
+    """Test that create_recipe_d4 works properly from unified builder.
 
     `create_recipe_d3`/`create_sample_recipe_d3` removed (day21 cleanup) — 0 caller ngoài
     `packages/workbench` (đã kiểm kê toàn repo), hành vi là tập con thật sự của `create_recipe_d4`.
+    `create_recipe_d6` removed cùng lý do (workbench#31 follow-up) — 0 caller production, chỉ tự
+    tham chiếu trong test của chính package; `create_dynamic_recipe` là builder Form-Feed còn lại.
     """
     r4 = create_recipe_d4(agent_id="d4-agent")
     assert r4.agent_id == "d4-agent"
     assert len(r4.dag.nodes) == 3
-
-    r6 = create_recipe_d6(
-        agent_id="d6-agent",
-        tenant_id=ANKOR_ID,
-        instructions="inst",
-        model="gemini-2.5-flash",
-        tool_whitelist=["kb_search"],
-        kb_id="kb1",
-        scope="ankor/public",
-        query="query",
-    )
-    assert r6.agent_id == "d6-agent"
-    assert len(r6.dag.nodes) == 3
 
 
 def test_default_golden_set_ref_points_to_golden_30() -> None:
@@ -183,18 +171,6 @@ def test_default_golden_set_ref_points_to_golden_30() -> None:
 
     r4 = create_recipe_d4()
     assert r4.golden_set_ref == "callisto-golden-30-v1"
-
-    r6 = create_recipe_d6(
-        agent_id="d6-agent",
-        tenant_id=ANKOR_ID,
-        instructions="inst",
-        model="gemini-2.5-flash",
-        tool_whitelist=["kb_search"],
-        kb_id="kb1",
-        scope="ankor/public",
-        query="query",
-    )
-    assert r6.golden_set_ref == "callisto-golden-30-v1"
 
 
 class _NoOpTraceWriter:

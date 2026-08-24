@@ -1,11 +1,17 @@
 """Recipe Builder module for Workbench (SWE owner — Thiệu Quang Minh).
 
-Provides unified recipe building functions for Day 4, Day 6, and dynamic DAG recipes.
+Provides unified recipe building functions for Day 4 and dynamic DAG recipes.
 
 `create_sample_recipe_d3`/alias `create_recipe_d3` (Day 3 precursor) removed Day 21 — kiểm kê
 toàn repo xác nhận 0 caller ngoài `packages/workbench` (không production, không submodule khác),
 hành vi là tập con thật sự của `create_recipe_d4`. Xem `docs/design-notes/
 swe-day21-user-flow-diagrams.md` cho evidence đầy đủ.
+
+`create_recipe_d6` (Day 6 Form-Feed builder) removed 2026-08-24 (workbench#31 follow-up cleanup)
+— kiểm kê toàn repo xác nhận 0 caller production (`apps/studio`, `packages/kb`), chỉ còn tự tham
+chiếu trong test của chính package + 1 script rời `scripts/smoke_eval_d6.py` (gốc kit,
+đóng băng từ D7, không nằm trong CI nào). `create_dynamic_recipe` là builder Form-Feed thật còn
+lại — nó đã luôn có đủ tính chất "no hardcoded defaults" mà `create_recipe_d6` từng cung cấp.
 """
 
 from __future__ import annotations
@@ -215,76 +221,6 @@ def create_recipe_d4(
     )
 
 
-def create_recipe_d6(
-    agent_id: str,
-    tenant_id: UUID,
-    instructions: str,
-    model: str,
-    tool_whitelist: list[str],
-    kb_id: str,
-    scope: str,
-    query: str,
-    golden_set_ref: str = "callisto-golden-30-v1",
-    success_threshold: float = 0.9,
-    citation_accuracy_threshold: float = 0.95,
-) -> Recipe:
-    """Build a Day 6 dynamic Recipe instance driven 100% by user inputs.
-
-    All core parameters (`agent_id`, `tenant_id`, `instructions`, `model`,
-    `tool_whitelist`, `kb_id`, `scope`, `query`) are required positional/keyword
-    arguments with NO hardcoded default values.
-    """
-    t_id = tenant_id if isinstance(tenant_id, UUID) else UUID(tenant_id)
-
-    config = build_agent_config(
-        instructions=instructions,
-        model=model,
-        tool_whitelist=tool_whitelist,
-    )
-
-    kb_bind = KbBinding(
-        kb_id=kb_id,
-        scope=scope,
-    )
-
-    # `_parse_kb_scope` chỉ validate CẤU TRÚC của `scope` (bắt lỗi gõ sai sớm lúc build) — giá trị
-    # trả về không còn cần đưa vào `node.params` nữa: `interpreter.run()` luôn ghi đè
-    # `tenant_id`/`section_roles` của node `kb-retrieve` bằng `session_context` (D8/D17, #111),
-    # nên bất kỳ giá trị nào khai ở đây đều bị bỏ qua tại thời điểm chạy thật.
-    _parse_kb_scope(scope, t_id)
-
-    nodes = [
-        Node(
-            id="n1",
-            type=NodeType.KB_RETRIEVE,
-            params={
-                "query": query,
-                "top_k": 3,
-            },
-        ),
-        Node(id="n2", type=NodeType.LLM_STEP, params={"temperature": 0.0}),
-        Node(id="n4", type=NodeType.END, params={}),
-    ]
-
-    edges = [
-        Edge(from_="n1", to="n2"),
-        Edge(from_="n2", to="n4"),
-    ]
-
-    return Recipe(
-        agent_id=agent_id,
-        tenant_id=t_id,
-        agent_config=config,
-        dag=Dag(nodes=nodes, edges=edges),
-        kb_binding=kb_bind,
-        golden_set_ref=golden_set_ref,
-        scorecard_threshold=ScorecardThreshold(
-            success=success_threshold,
-            citation_accuracy=citation_accuracy_threshold,
-        ),
-    )
-
-
 __all__ = [
     "ANKOR_ID",
     "BOREA_ID",
@@ -292,5 +228,4 @@ __all__ = [
     "build_agent_config",
     "create_dynamic_recipe",
     "create_recipe_d4",
-    "create_recipe_d6",
 ]

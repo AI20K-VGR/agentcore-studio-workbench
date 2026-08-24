@@ -1,7 +1,18 @@
-"""Comprehensive test suite for Day 6 SWE wiring & Interpreter integration.
+"""Test suite for `_parse_kb_scope()` (kb_binding.scope structural validation) and its
+end-to-end wiring through `create_recipe_d4` + `interpreter.run()`.
 
-Validates Form Feed dynamic Recipe creation (create_recipe_d6), un-hardcoded parameters,
-scope parsing, multi-tenant isolation, and Recipe -> Interpreter entrypoint execution.
+Renamed from `test_wiring_d6.py` when `create_recipe_d6` was removed (workbench#31 follow-up
+cleanup, 2026-08-24) — 0 production caller (`apps/studio`, `packages/kb`), self-referential only
+inside `packages/workbench`'s own tests + 1 frozen root script (`scripts/smoke_eval_d6.py`, not
+in any CI). `_parse_kb_scope` itself is still real, used code (called from `create_recipe_d4`),
+so its coverage moves here rather than being deleted along with the builder it used to also back.
+Dropped, not migrated: `test_unhardcoded_tool_whitelist_selection` and the `TOOL_CALL` node
+assertion inside the old `test_create_recipe_d6_with_pure_dynamic_inputs` — both tested a node
+shape that no longer exists after workbench#31 removed the dead `tool-call{kb_search}` node from
+every builder. `test_wiring_d6_recipe_to_interpreter_entry` also dropped as a pure duplicate of
+`test_wiring_d5.py::test_workbench_recipe_emits_trace_events_via_interpreter`, which already
+covers the same "recipe from a builder runs end-to-end through the interpreter" DoD via
+`create_recipe_d4`.
 
 Owner: SWE (Thiệu Quang Minh).
 """
@@ -11,10 +22,10 @@ from __future__ import annotations
 from uuid import UUID
 
 import pytest
-from studio_contracts import NodeType, TraceEvent
+from studio_contracts import TraceEvent
 from studio_engine.interpreter import run
 
-from studio_workbench import create_recipe_d6
+from studio_workbench import create_recipe_d4
 from studio_workbench.builder import _parse_kb_scope
 from studio_workbench.tenant_wall import ResolvedContext
 
@@ -32,9 +43,11 @@ class _RecordingTraceWriter:
         self.events.append(event)
 
 
-def test_create_recipe_d6_with_pure_dynamic_inputs() -> None:
-    """Test 1: Verify create_recipe_d6 builds a valid Recipe from 100% dynamic Form Feed inputs."""
-    recipe = create_recipe_d6(
+def test_create_recipe_d4_with_custom_inputs() -> None:
+    """create_recipe_d4 propagates every override kwarg through to the built Recipe —
+    `tenant_id`/`section_roles` KHÔNG còn ở `node.params` (hardening #122): `interpreter.run()`
+    luôn ghi đè cả 2 từ `session_context` (D8/D17, #111)."""
+    recipe = create_recipe_d4(
         agent_id="custom-agent-99",
         tenant_id=BOREA_ID,
         instructions="Quy định nghỉ phép năm và chế độ công tác.",
@@ -53,136 +66,56 @@ def test_create_recipe_d6_with_pure_dynamic_inputs() -> None:
     assert recipe.kb_binding.kb_id == "kb-hr-policy-v2"
     assert recipe.kb_binding.scope == "borea/hr"
 
-    # Check node n1 (KB_RETRIEVE) params — `tenant_id`/`section_roles` KHÔNG còn ở đây (hardening
-    # #122): `interpreter.run()` luôn ghi đè cả 2 từ `session_context` (D8/D17, #111).
     n1 = recipe.dag.nodes[0]
     assert n1.params.get("query") == "Số ngày nghỉ phép của nhân viên chính thức?"
     assert "tenant_id" not in n1.params
     assert "section_roles" not in n1.params
 
-    # Check node n2 (LLM_STEP) params
     n2 = recipe.dag.nodes[1]
     assert n2.params.get("temperature") == 0.0
 
-    # Check node n4 (END) params
-    n4 = recipe.dag.nodes[2]
-    assert n4.type == NodeType.END
 
-
-def test_recipe_d6_scope_parsing_multi_roles() -> None:
-    """Test 2: Verify scope parsing extracts multi-roles correctly (e.g. "ankor/public, hr, finance").
+def test_scope_parsing_multi_roles() -> None:
+    """Verify scope parsing extracts multi-roles correctly (e.g. "ankor/public, hr, finance").
 
     Test trực tiếp `_parse_kb_scope()` — không còn qua `node.params` (hardening #122): giá trị đó
     không còn được ghi vào node nữa, nhưng `_parse_kb_scope` vẫn phải parse đúng cấu trúc (dùng để
     validate lúc build, xem docstring hàm)."""
     assert _parse_kb_scope("ankor/public, hr, finance", ANKOR_ID) == ["public", "hr", "finance"]
 
-    recipe = create_recipe_d6(
-        agent_id="agent-multi-role",
-        tenant_id=ANKOR_ID,
-        instructions="Tra cứu đa phòng ban.",
-        model="gemini-2.5-flash",
-        tool_whitelist=["kb_search"],
-        kb_id="kb-all",
-        scope="ankor/public, hr, finance",
-        query="Quy trình thanh toán công tác phí?",
-    )
+    recipe = create_recipe_d4(tenant_id=ANKOR_ID, scope="ankor/public, hr, finance")
     assert recipe.kb_binding.scope == "ankor/public, hr, finance"
 
 
-def test_recipe_d6_allows_scope_tenant_slug_disagreement() -> None:
+def test_scope_allows_tenant_slug_disagreement() -> None:
     """kb_binding.scope tenant slug (e.g. "borea") KHÔNG bị cross-check với tenant_id thật
     truyền vào — bỏ ở kit#92/workbench#17 sau khi bump pointer vỡ 2 quadrant khác:
     packages/kb's INV-1 test (test_spine_live.py) cố tình dựng recipe với tenant_id (attacker
     khai) lệch scope, và apps/studio's eval-harness dùng slug placeholder "t" bất kể tenant_id
     thật hay tổng hợp. Chặn ở recipe-build-time là sai chỗ; INV-1 (session luôn thắng recipe tự
     khai) được enforce ở tenant_wall.py, không phải ở đây."""
-    # Slug lệch tenant_id — `_parse_kb_scope` vẫn parse ra roles bình thường, không raise.
     assert _parse_kb_scope("borea/hr", ANKOR_ID) == ["hr"]
 
-    recipe = create_recipe_d6(
-        agent_id="agent-mismatch",
+    recipe = create_recipe_d4(
         tenant_id=ANKOR_ID,
-        instructions="x",
-        model="gemini-2.5-flash",
-        tool_whitelist=["kb_search"],
-        kb_id="kb-x",
         scope="borea/hr",  # slug lệch tenant_id=ANKOR_ID — được phép, xem docstring
-        query="x",
     )
     assert recipe.tenant_id == ANKOR_ID
     assert recipe.kb_binding.scope == "borea/hr"
 
 
-def test_unhardcoded_tool_whitelist_selection() -> None:
-    """Test 3: Verify tool_whitelist is properly preserved in recipe.agent_config."""
-    recipe = create_recipe_d6(
-        agent_id="agent-custom-tool",
-        tenant_id=ANKOR_ID,
-        instructions="Tìm kiếm bằng sql_query.",
-        model="gemini-2.5-flash",
-        tool_whitelist=["sql_query_tool", "web_search"],
-        kb_id="kb-db-v1",
-        scope="ankor/engineering",
-        query="Truy vấn dữ liệu bảng?",
-    )
-
-    assert recipe.agent_config.tool_whitelist == ["sql_query_tool", "web_search"]
-
-
 @pytest.mark.asyncio
-async def test_wiring_d6_recipe_to_interpreter_entry() -> None:
-    """Test 4: Verify dynamic Recipe execution in interpreter.run()."""
-    from studio_engine.demo_stubs import EmptyEmbedding, EmptyKbSearch, FixtureLLM
-
-    recipe = create_recipe_d6(
-        agent_id="agent-trace-test",
-        tenant_id=ANKOR_ID,
-        instructions="Hãy tra cứu quy định Callisto.",
-        model="gemini-2.5-flash",
-        tool_whitelist=["kb_search"],
-        kb_id="kb-callisto-v1",
-        scope="ankor/public",
-        query="Nhân viên được nghỉ phép bao nhiêu ngày?",
-    )
-
-    trace_writer = _RecordingTraceWriter()
-    result = await run(
-        recipe,
-        kb_search=EmptyKbSearch(),
-        llm=FixtureLLM("smoke-01"),
-        embedding=EmptyEmbedding(),
-        trace_writer=trace_writer,
-        session_context=ResolvedContext(tenant_id=ANKOR_ID, user="test-harness", roles=["public"]),
-    )
-
-    assert result.run_id is not None
-    assert len(result.final_state) == 3
-    assert "n1" in result.final_state
-    assert "n2" in result.final_state
-    assert "n4" in result.final_state
-
-    # Verify trace emission if supported by current engine version
-    if len(trace_writer.events) > 0:
-        assert len(trace_writer.events) == 3
-        for event in trace_writer.events:
-            assert event.run_id == result.run_id
-            assert event.agent_id == "agent-trace-test"
-            assert event.tenant_id == ANKOR_ID
-
-
-@pytest.mark.asyncio
-async def test_wiring_d6_with_kb_search_execution() -> None:
-    """Test 5: Verify End-to-End dynamic wiring with KbSearch seam."""
+async def test_recipe_with_kb_search_execution() -> None:
+    """End-to-end: recipe built by create_recipe_d4 wired through interpreter.run() with a real
+    StaticKbSearch — verifies kb_binding.scope actually reaches the kb-retrieve node's grounded
+    answer, not just that the builder accepted it."""
     from studio_engine.demo_stubs import EmptyEmbedding, FixtureLLM
     from studio_kb import StaticKbSearch
 
-    recipe = create_recipe_d6(
+    recipe = create_recipe_d4(
         agent_id="agent-callisto-e2e",
         tenant_id=ANKOR_ID,
         instructions="Bạn là trợ lý nội bộ. Trả lời dựa trên tài liệu.",
-        model="gemini-2.5-flash",
-        tool_whitelist=["kb_search"],
         kb_id="kb-callisto-v1",
         scope="ankor/public",
         query="Nhân viên xin nghỉ phép cần báo trước bao lâu?",
@@ -205,10 +138,6 @@ async def test_wiring_d6_with_kb_search_execution() -> None:
 
     # Unconditional — this query/tenant/role combo deterministically yields a chunk from
     # StaticKbSearch (token-overlap scoring, tie-broken by chunk_id per static_search.py:99-101).
-    # The prior `if len(kb_output) > 0:` guard (added `7106fc5`) silently no-op'd this assertion
-    # whenever KB returned `[]`, so the test could not tell "KB wired correctly" from "KB wiring
-    # broken and returning nothing" — điểm gãy #4, `daily-notes/2026-07-27-DongAnh2704.md:200`.
-    # `e2e_smoke_eval.py` hits this same case as SC-01 and always grounds it.
     assert len(kb_output) > 0, f"kb_output was empty: {kb_output!r}"
     assert kb_output[0].chunk_id == "ankor-leave-001#c1"
     llm_output = result.final_state["n2"]
@@ -275,34 +204,19 @@ def test_parse_kb_scope_allows_slug_tenant_disagreement_on_two_real_tenants() ->
     assert _parse_kb_scope("ankor/public", BOREA_ID) == ["public"]
 
 
-def test_create_recipe_d6_allows_typo_slug() -> None:
-    """create_recipe_d6 KHÔNG còn raise trên slug lạ/typo ('boera') — bỏ ở
-    kit#92/workbench#17 cùng lý do với test_recipe_d6_allows_scope_tenant_slug_disagreement."""
+def test_create_recipe_d4_allows_typo_slug() -> None:
+    """create_recipe_d4 KHÔNG raise trên slug lạ/typo ('boera') — bỏ ở
+    kit#92/workbench#17 cùng lý do với test_scope_allows_tenant_slug_disagreement."""
     assert _parse_kb_scope("boera/hr", BOREA_ID) == ["hr"]
 
-    recipe = create_recipe_d6(
-        agent_id="agent-bad-scope",
+    recipe = create_recipe_d4(
         tenant_id=BOREA_ID,
-        instructions="test",
-        model="gemini-2.5-flash",
-        tool_whitelist=["kb_search"],
-        kb_id="kb-test",
         scope="boera/hr",  # typo: 'boera' thay vì 'borea' — được phép, xem docstring _parse_kb_scope
-        query="test query",
     )
     assert recipe.kb_binding.scope == "boera/hr"
 
 
-def test_create_recipe_d6_rejects_empty_roles() -> None:
-    """create_recipe_d6 với empty roles phải raise ValueError tại build time."""
+def test_create_recipe_d4_rejects_empty_roles() -> None:
+    """create_recipe_d4 với empty roles phải raise ValueError tại build time."""
     with pytest.raises(ValueError, match="roles trong scope rỗng"):
-        create_recipe_d6(
-            agent_id="agent-empty-roles",
-            tenant_id=ANKOR_ID,
-            instructions="test",
-            model="gemini-2.5-flash",
-            tool_whitelist=["kb_search"],
-            kb_id="kb-test",
-            scope="ankor/",  # empty roles
-            query="test query",
-        )
+        create_recipe_d4(tenant_id=ANKOR_ID, scope="ankor/")  # empty roles
