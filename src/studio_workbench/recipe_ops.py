@@ -8,23 +8,21 @@ EVERY `kb-retrieve` node in the DAG, eval_adapter's patches only the FIRST one. 
 admin wire up as many as they want) therefore behaves differently depending on whether it's reached
 via chat or via eval/publish: exactly the kind of "the recipe that got SCORED isn't the recipe that
 RUNS" gap `DEC-D20-07` closed on the harness side of the pipeline, reopened on the chat side by two
-copies of the same idea disagreeing. This module is the fix for that drift, but the two `apps/studio`
-duplicates are NOT wired to it yet — that's a companion PR (`apps/studio` imports `with_query`/
-`without_query` from here and deletes its own two copies), out of scope for this PR. Until that
-lands, `with_query`/`without_query` below have no caller in this repo.
+copies of the same idea disagreeing. This module is the fix for that drift. The companion PR has
+since landed: `apps/studio/src/studio_app/routes/chat.py` and `eval_adapter.py` both import and call
+`with_query`/`without_query` from here now, and their own two hand-written copies are gone.
 
 Consolidated here (`studio_workbench`) rather than left in `apps_studio` because this is
 `Recipe`-shape domain logic — the same category as `create_dynamic_recipe`/`create_recipe_d4`
 already owned by `builder.py` in this package — not an HTTP-route concern. Picked the "patch EVERY
 kb-retrieve node" semantics (chat.py's) as canonical: it is the one that already accounted for
 arbitrary, admin-designed canvas DAGs (`eval_adapter.py`'s "first node only" only ever agreed with
-it by coincidence, because `create_recipe_d4`'s fixed 4-node DAG happens to have exactly one
-`kb-retrieve` node). **Once wired up, this is a real behavior change, not a pure refactor**: on the
-real publish path (`create_dynamic_recipe`, i.e. an admin-drawn canvas), a recipe with 2+
-`kb-retrieve` nodes will start getting `query` injected into ALL of them instead of just the first
-— `create_recipe_d4`-based golden-set scoring is unaffected (fixed single `kb-retrieve` node), so
-this doesn't move today's golden-30 numbers, but it will change eval/publish behavior for any real
-multi-`kb-retrieve` canvas once the companion PR flips the call site over."""
+it by coincidence, because `create_recipe_d4`'s fixed DAG happens to have exactly one
+`kb-retrieve` node). **This was a real behavior change, not a pure refactor**: on the real publish
+path (`create_dynamic_recipe`, i.e. an admin-drawn canvas), a recipe with 2+ `kb-retrieve` nodes now
+gets `query` injected into ALL of them instead of just the first — `create_recipe_d4`-based
+golden-set scoring is unaffected (fixed single `kb-retrieve` node), so this didn't move golden-30
+numbers, but it did change eval/publish behavior for any real multi-`kb-retrieve` canvas."""
 
 from __future__ import annotations
 
