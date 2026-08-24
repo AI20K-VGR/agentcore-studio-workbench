@@ -206,7 +206,7 @@ class FakeConn:
             ]
             return FakeCursor([(id_matches[0].id,)] if id_matches else [])
 
-        if q.startswith("UPDATE wb.recipes SET status = 'published' WHERE id"):
+        if q.startswith("UPDATE wb.recipes SET status = 'published'"):
             (row_id,) = p
             for r in self.recipes:
                 if r.id == row_id:
