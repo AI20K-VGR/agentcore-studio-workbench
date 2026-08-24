@@ -17,7 +17,7 @@ import pytest
 from studio_contracts import Edge, EmbeddingService, Node, NodeType, TraceEvent
 from studio_engine.interpreter import run
 
-from studio_workbench import create_recipe, create_recipe_d4
+from studio_workbench import create_recipe
 from studio_workbench.tenant_wall import ResolvedContext
 
 ANKOR_ID = UUID("a0000000-0000-0000-0000-000000000001")
@@ -57,15 +57,22 @@ class _RecordingTraceWriter:
 
 
 def test_agent_config_has_all_three_fields() -> None:
-    """DoD 3: Verify Recipe.agent_config exposes all 3 required fields."""
-    recipe = create_recipe_d4(
+    """DoD 3: Verify Recipe.agent_config exposes all 3 required fields.
+
+    workbench#41 — `create_recipe_d4` đã bị xoá (nhận `model`/`kb_id`/`scope` làm tham số). Qua
+    `create_recipe`, `model` hardcode cố định `"gemini-2.5-flash"` (khớp giá trị test này đã khoá
+    từ trước), `kb_id`/`scope` không còn là tham số nữa nên không truyền được ở đây."""
+    recipe = create_recipe(
         agent_id="agent-d7-full-config",
         tenant_id=ANKOR_ID,
         instructions="Bạn là trợ lý AI tra cứu Callisto.",
-        model="gemini-2.5-flash",
         tool_whitelist=["kb_search", "sql_query_tool"],
-        kb_id="kb-callisto-v1",
-        scope="ankor/public, hr",
+        nodes=[
+            Node(id="n1", type=NodeType.KB_RETRIEVE, params={"top_k": 3}),
+            Node(id="n2", type=NodeType.LLM_STEP, params={"temperature": 0.0}),
+            Node(id="n4", type=NodeType.END, params={}),
+        ],
+        edges=[Edge(from_="n1", to="n2"), Edge(from_="n2", to="n4")],
     )
 
     # 1. instructions

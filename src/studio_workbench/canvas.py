@@ -5,9 +5,9 @@ chỗ DUY NHẤT recipe đó được phép đi vào phía Python: nó parse qua
 chạy `graph_lint()` — không có đường nào lấy được `Recipe` từ canvas mà chưa qua lint.
 
 ## Vì sao là module riêng, không nhét vào `recipe.py`
-`recipe.py` chứa các hàm DỰNG recipe từ tham số đã có kiểu (`create_recipe_d4`,
-`create_recipe`) — đầu vào
-của chúng đã là `Node`/`Edge` hợp lệ, và chúng cố ý KHÔNG lint (dựng và kiểm là 2 việc khác nhau).
+`recipe.py` chứa hàm DỰNG recipe từ tham số đã có kiểu (`create_recipe`, workbench#41 — `create_recipe_d4`
+đã bị xoá) — đầu vào
+của nó đã là `Node`/`Edge` hợp lệ, và nó cố ý KHÔNG lint (dựng và kiểm là 2 việc khác nhau).
 Khe canvas thì ngược lại: đầu vào là JSON tự do từ trình duyệt, chưa có gì bảo đảm, và bắt buộc
 phải lint. Trộn 2 nhóm vào 1 file sẽ khiến người đọc phải nhớ "hàm nào lint, hàm nào không" —
 tách ra thì tên module tự trả lời.
