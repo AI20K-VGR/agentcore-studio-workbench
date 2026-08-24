@@ -73,7 +73,7 @@ call. Lives here, not in `studio_evalhub`, for two independent reasons: (1) `tes
 xuat_recipe_hash` (evalhub, AST-guard) forbids `hashlib`/`model_dump_json()` inside
 `src/studio_evalhub/` outright — evalhub may only RECEIVE a hash, never derive one (`DEC-D20-02`);
 (2) `Recipe`'s canonical byte-form is inherently a `studio_contracts`/`studio_workbench` question
-(this package already owns every other `Recipe`-shape operation — `builder.py`, `canvas.py`), not
+(this package already owns every other `Recipe`-shape operation — `recipe.py`, `canvas.py`), not
 an eval-harness one.
 
 **Canonical form: `sha256(json.dumps(recipe.model_dump(mode="json", by_alias=True), sort_keys=True,
