@@ -12,7 +12,7 @@ from studio_contracts import Edge, Node, NodeType, TraceEvent
 from studio_engine.demo_stubs import EmptyEmbedding, EmptyKbSearch, FixtureLLM
 from studio_engine.interpreter import run
 
-from studio_workbench import create_recipe, create_recipe_d4
+from studio_workbench import create_recipe
 from studio_workbench.tenant_wall import ResolvedContext
 from studio_workbench.validator import graph_lint
 
@@ -32,7 +32,18 @@ class _RecordingTraceWriter:
 @pytest.mark.asyncio
 async def test_workbench_recipe_emits_trace_events_via_interpreter() -> None:
     """Verify that a Recipe built by Workbench (Day 4/5) emits 3 TraceEvents when executed by Interpreter."""
-    recipe = create_recipe_d4()
+    recipe = create_recipe(
+        agent_id="agent-callisto-d4",
+        tenant_id=_ANKOR_ID,
+        instructions="Tra cứu quy trình và bảo mật Callisto.",
+        tool_whitelist=[],
+        nodes=[
+            Node(id="n1", type=NodeType.KB_RETRIEVE, params={"top_k": 3}),
+            Node(id="n2", type=NodeType.LLM_STEP, params={"temperature": 0.0}),
+            Node(id="n4", type=NodeType.END, params={}),
+        ],
+        edges=[Edge(from_="n1", to="n2"), Edge(from_="n2", to="n4")],
+    )
     writer = _RecordingTraceWriter()
 
     result = await run(

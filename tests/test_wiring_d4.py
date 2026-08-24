@@ -8,13 +8,20 @@ from __future__ import annotations
 from uuid import UUID
 
 import pytest
-from studio_contracts import TraceEvent
+from studio_contracts import Edge, Node, NodeType, TraceEvent
 from studio_engine.interpreter import run
 
-from studio_workbench import build_agent_config, create_recipe_d4
+from studio_workbench import build_agent_config, create_recipe
 from studio_workbench.tenant_wall import ResolvedContext
 
 ANKOR_ID = UUID("a0000000-0000-0000-0000-000000000001")
+
+_NODES = [
+    Node(id="n1", type=NodeType.KB_RETRIEVE, params={"top_k": 3}),
+    Node(id="n2", type=NodeType.LLM_STEP, params={"temperature": 0.0}),
+    Node(id="n4", type=NodeType.END, params={}),
+]
+_EDGES = [Edge(from_="n1", to="n2"), Edge(from_="n2", to="n4")]
 
 
 def test_build_agent_config_from_form_inputs() -> None:
@@ -29,12 +36,17 @@ def test_build_agent_config_from_form_inputs() -> None:
     assert config.tool_whitelist == ["kb_search"]
 
 
-def test_create_recipe_d4_contains_kb_binding() -> None:
-    """Test that create_recipe_d4 builds a Recipe with valid kb_binding.{kb_id, scope}."""
-    recipe = create_recipe_d4(
+def test_create_recipe_contains_kb_binding() -> None:
+    """workbench#41 — `create_recipe_d4` đã bị xoá (nhận `kb_id`/`scope` làm tham số động).
+    `create_recipe` hardcode `kb_binding` cố định — khoá giá trị hardcode đó, không còn khoá
+    round-trip từ tham số client (không còn tham số nào để round-trip nữa)."""
+    recipe = create_recipe(
         agent_id="agent-callisto-01",
-        kb_id="kb-callisto-v1",
-        scope="ankor/public",
+        tenant_id=ANKOR_ID,
+        instructions="Hỗ trợ tra cứu quy định Callisto.",
+        tool_whitelist=[],
+        nodes=_NODES,
+        edges=_EDGES,
     )
 
     assert recipe.agent_id == "agent-callisto-01"
@@ -62,7 +74,14 @@ async def test_wiring_recipe_to_interpreter_entry() -> None:
     """Test wiring: passing Recipe with kb_binding into interpreter.run()."""
     from studio_engine.demo_stubs import EmptyEmbedding, EmptyKbSearch, FixtureLLM
 
-    recipe = create_recipe_d4()
+    recipe = create_recipe(
+        agent_id="agent-callisto-d4",
+        tenant_id=ANKOR_ID,
+        instructions="Tra cứu quy trình và bảo mật Callisto.",
+        tool_whitelist=[],
+        nodes=_NODES,
+        edges=_EDGES,
+    )
     result = await run(
         recipe,
         kb_search=EmptyKbSearch(),

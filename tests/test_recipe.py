@@ -14,7 +14,6 @@ from studio_workbench import (
     ANKOR_ID,
     build_agent_config,
     create_recipe,
-    create_recipe_d4,
 )
 from studio_workbench.tenant_wall import ResolvedContext
 
@@ -98,25 +97,13 @@ def test_create_recipe_3_nodes_with_kb() -> None:
     assert recipe.kb_binding.scope == "ankor/public"
 
 
-def test_legacy_builders_compatibility() -> None:
-    """Test that create_recipe_d4 works properly from unified builder.
-
-    `create_recipe_d3`/`create_sample_recipe_d3` removed (day21 cleanup) — 0 caller ngoài
-    `packages/workbench` (đã kiểm kê toàn repo), hành vi là tập con thật sự của `create_recipe_d4`.
-    `create_recipe_d6` removed cùng lý do (workbench#31 follow-up) — 0 caller production, chỉ tự
-    tham chiếu trong test của chính package; `create_recipe` là builder Form-Feed còn lại.
-    """
-    r4 = create_recipe_d4(agent_id="d4-agent")
-    assert r4.agent_id == "d4-agent"
-    assert len(r4.dag.nodes) == 3
-
-
 def test_default_golden_set_ref_points_to_golden_30() -> None:
     """D16 (kit#107): default `golden_set_ref` must pin to the real 30-case golden set, not the
-    stale 5-case smoke set. `create_recipe_d4` is the production call path
-    (`apps/studio/src/studio_app/eval_adapter.py:98`, called WITHOUT an explicit `golden_set_ref`)
-    — without this pin, a future edit/revert of the literal has zero local test signal (review
-    finding, TranBaDat2607, workbench#20)."""
+    stale 5-case smoke set. `create_recipe` is the production call path
+    (`apps/studio/src/studio_app/eval_adapter.py::certified_recipe`, workbench#41 — trước đây
+    `create_recipe_d4`, called WITHOUT an explicit `golden_set_ref`) — without this pin, a future
+    edit/revert of the literal has zero local test signal (review finding, TranBaDat2607,
+    workbench#20)."""
     nodes = [
         Node(id="n1", type=NodeType.LLM_STEP, params={}),
         Node(id="n2", type=NodeType.END, params={}),
@@ -132,9 +119,6 @@ def test_default_golden_set_ref_points_to_golden_30() -> None:
         edges=edges,
     )
     assert r_dynamic.golden_set_ref == "callisto-golden-30-v1"
-
-    r4 = create_recipe_d4()
-    assert r4.golden_set_ref == "callisto-golden-30-v1"
 
 
 class _NoOpTraceWriter:

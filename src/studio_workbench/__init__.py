@@ -14,7 +14,6 @@ from studio_workbench.recipe import (
     BOREA_ID,
     build_agent_config,
     create_recipe,
-    create_recipe_d4,
 )
 from studio_workbench.recipe_ops import with_query, without_query
 from studio_workbench.validator import graph_lint
@@ -24,7 +23,6 @@ __all__ = [
     "BOREA_ID",
     "build_agent_config",
     "create_recipe",
-    "create_recipe_d4",
     "graph_lint",
     "publish",
     "recipe_from_canvas",
