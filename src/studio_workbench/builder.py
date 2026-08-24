@@ -159,7 +159,13 @@ def create_recipe_d4(
     the declared KB scope to `kb.search`.
     """
     if tool_whitelist is None:
-        tool_whitelist = ["kb_search"]
+        # Review vòng 2 web#33 (dholmes0207, nit): default KHÔNG còn được `["kb_search"]` từ khi
+        # workbench#31 xoá node tool-call{kb_search} khỏi DAG này — không có node tool-call nào
+        # tiêu thụ giá trị này nữa. Giữ `["kb_search"]` là một cái bẫy chết: ai thêm lại 1 node
+        # tool-call vào d4 sau này sẽ thừa kế đúng `kb_search` làm default hợp lý-nhìn-vào, tức
+        # dựng lại nguyên văn bug workbench#31 vừa xoá. `[]` đóng cửa đó — không tool nào được
+        # whitelist ngầm định cho một recipe không khai node tool-call nào.
+        tool_whitelist = []
 
     t_id = tenant_id if isinstance(tenant_id, UUID) else UUID(tenant_id)
 
@@ -190,18 +196,12 @@ def create_recipe_d4(
             },
         ),
         Node(id="n2", type=NodeType.LLM_STEP, params={"temperature": 0.0}),
-        Node(
-            id="n3",
-            type=NodeType.TOOL_CALL,
-            params={"tool": tool_whitelist[0] if tool_whitelist else "kb_search"},
-        ),
         Node(id="n4", type=NodeType.END, params={}),
     ]
 
     edges = [
         Edge(from_="n1", to="n2"),
-        Edge(from_="n2", to="n3"),
-        Edge(from_="n3", to="n4"),
+        Edge(from_="n2", to="n4"),
     ]
 
     return Recipe(
@@ -263,18 +263,12 @@ def create_recipe_d6(
             },
         ),
         Node(id="n2", type=NodeType.LLM_STEP, params={"temperature": 0.0}),
-        Node(
-            id="n3",
-            type=NodeType.TOOL_CALL,
-            params={"tool": tool_whitelist[0] if tool_whitelist else "kb_search"},
-        ),
         Node(id="n4", type=NodeType.END, params={}),
     ]
 
     edges = [
         Edge(from_="n1", to="n2"),
-        Edge(from_="n2", to="n3"),
-        Edge(from_="n3", to="n4"),
+        Edge(from_="n2", to="n4"),
     ]
 
     return Recipe(

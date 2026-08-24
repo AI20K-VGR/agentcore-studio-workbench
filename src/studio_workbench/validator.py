@@ -20,7 +20,13 @@ engine (AIE-1) interpreter — "recipe không qua validator = không interpret" 
    interpreter with a branch it cannot walk. This rejects EVERY recipe with real `condition`
    branching, including structurally valid ones, until `ConditionExecutor` is implemented — at
    which point this rule must be relaxed to allow `condition` nodes to fan out. AIE-1 owns
-   the signal for when that is; do not relax unilaterally.
+   the signal for when that is; do not relax unilaterally. First real invocation of this
+   signal: kit#206 (2026-08-24) — canvas Hub-and-Spoke fan-out was proposed and AIE-1 (Trần
+   Bá Đạt) confirmed **keep this rule blocking**: `engine#36`'s `run_agent_loop()` picks tools
+   at runtime from the whitelist/registry via a `TOOL_CALL:` signal, not from DAG fan-out
+   edges, so a fan-out edge is the wrong mechanism for representing "1 LLM + N tools" — not
+   merely "correct but not yet implemented". Hub-and-Spoke stays a canvas-layout concept; the
+   exported DAG stays linear. See `docs/decisions/recipe.md` ADR-D24-01.
 5. **no forbidden cycle** — the DAG (`recipe.dag.nodes` + `recipe.dag.edges`) must not contain a
    cycle; a cyclic recipe must never reach the interpreter (R-SPEC A1#1 turing-completeness cap).
 6. **the walk terminates ON an `end` node** — starting from the single start node and following
@@ -47,7 +53,7 @@ from studio_contracts import NodeType, Recipe
 
 
 def graph_lint(recipe: Recipe) -> None:
-    """Validate `recipe`'s DAG against the 4 rules documented above.
+    """Validate `recipe`'s DAG against the 7 rules documented above.
 
     Raises `ValueError` on the first violation found (never returns a boolean/error-list —
     a recipe either passes cleanly or it does not reach the interpreter at all). Returns
@@ -95,9 +101,8 @@ def graph_lint(recipe: Recipe) -> None:
         )
     start_id = start_ids[0]
 
-    # Rule 4 — every node has ≤ 1 outgoing edge. TEMPORARY (see module docstring): rejects
-    # real `condition` branching until AIE-1's `ConditionExecutor` is implemented. Mirrors
-    # `studio_engine.interpreter._build_next_map`, moved upstream for the same reason as rule 3.
+    # Rule 4 — exactly 0 or 1 outgoing edge per node (temporary stub until
+    # ConditionExecutor lands in AIE-1: see module docstring).
     next_by_id: dict[str, str] = {}
     for edge in dag.edges:
         if edge.from_ in next_by_id:
@@ -137,7 +142,7 @@ def graph_lint(recipe: Recipe) -> None:
 
     # Rule 6 — the walk must terminate ON an `end` node, not merely run out of edges.
     # Safe to walk as a simple chain here: rules 3+4 already guarantee exactly 1 start node
-    # and ≤ 1 outgoing edge per node, and rule 5 already guarantees no cycle, so `next_by_id`
+    # and <= 1 outgoing edge per node, and rule 5 already guarantees no cycle, so `next_by_id`
     # (built during rule 4) has exactly one deterministic path from `start_id`.
     nodes_by_id = {node.id: node for node in dag.nodes}
     walk_id = start_id

@@ -118,11 +118,10 @@ async def test_protocol_cleanliness_gateway_embedding_without_interpreter_change
     assert result.run_id is not None
     assert "n1" in result.final_state
     assert "n2" in result.final_state
-    assert "n3" in result.final_state
     assert "n4" in result.final_state
 
-    # Verify execution completes without errors and trace_writer captured all 4 node events
-    assert len(trace_writer.events) == 4
+    # Verify execution completes without errors and trace_writer captured all 3 node events
+    assert len(trace_writer.events) == 3
     assert isinstance(result.final_state["n1"], list)
 
     # 2. Independent assertion: verify MockGatewayEmbedding structural compliance with EmbeddingService protocol

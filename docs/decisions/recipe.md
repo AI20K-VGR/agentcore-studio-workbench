@@ -24,6 +24,12 @@ freeze: FREEZE-READY   # chưa FROZEN — xem điều kiện còn thiếu bên d
 | DL-R5 | Q7 — bật RLS (`ENABLE`+`FORCE ROW LEVEL SECURITY` + policy) cho `wb.recipes`/`wb.recipe_versions`, mẫu `kb_chunks_tenant_isolation` | 2 bảng chứa IP tenant (`agent_config.instructions`, `kb_binding.scope`) với đường ghi/đọc thật lần đầu qua `publish()`/`rollback()` | Ký phần B ở [`packages/kb/docs/mini-rfc-tenant-schema-unify.md`](https://github.com/AI20K-VGR/agentcore-studio-kb/blob/main/docs/mini-rfc-tenant-schema-unify.md) (2026-08-12) + implement cùng branch trên | 🟡 chờ review |
 | DL-R6 | `Scorecard.recipe_hash is None` → `publish()` fail-closed (refuse), không tự nới lỏng | Đúng docstring `recipe_hash` (`scorecard.py:216-220`): "cannot verify which recipe this certifies ⇒ REFUSE". Every real `Scorecard` mang `None` tới khi AIE-2 wire producer (`DEC-03`) — `publish()` sẽ luôn refuse tới lúc đó, đây là hành vi đúng, không phải bug | `packages/workbench` branch `swe/day18-publish-rollback` | 🟢 implement xong |
 
+## D24 · 2026-08-24 — kit#206, luật 4 `graph_lint` giữ chặn fan-out (Hub-and-Spoke)
+
+| # | Quyết định | Lý do | PR / bằng chứng | Trạng thái |
+|---|---|---|---|---|
+| ADR-D24-01 | Luật 4 `graph_lint` **giữ chặn fan-out**. Hub-and-Spoke ở canvas là bố trí hình học; DAG xuất ra vẫn tuyến tính | Kiến trúc 1-LLM-N-tool (`engine#36`) **không** biểu diễn tool bằng cạnh DAG — LLM tự chọn tool lúc chạy qua `TOOL_CALL:`, danh sách đến từ whitelist/registry. Fan-out edge vì vậy là **sai cơ chế**, không phải "đúng nhưng chưa tới lúc". Nới luật 4 mà `_build_next_map` còn last-write-wins ⇒ recipe qua `graph_lint` rồi bị interpreter **nuốt im lặng** mọi `tool-call` trừ cái khai báo cuối: người dùng gắn 3 tool, hệ thống báo chạy thành công, 2 tool không có trong trace | repro `kit#206` (validator PR#33 + engine `main`): `graph_lint` PASS · walk `['n1','n2','t3','end']` · tool-call **bị nuốt** `['t1','t2']` · đường đi thật `routes/runs.py:122` | ✅ quyết — AIE-1 (Trần Bá Đạt) xác nhận `24/08 03:16Z`. 🟡 **điều kiện lật** cần đủ 3: interpreter duyệt nhiều nhánh · có luật gộp state · trace phản ánh nhánh song song. Nới vẫn cần tín hiệu AIE-1 bằng chữ |
+
 ## Còn mở — chặn `FROZEN` thật sự
 
 | # | Nội dung | Chờ ai |
