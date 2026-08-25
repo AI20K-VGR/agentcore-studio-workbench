@@ -216,12 +216,12 @@ def test_resolve_session_filters_blank_entries_out_of_roles_list() -> None:
     session = {
         "tenant_id": ANKOR_ID,
         "user": "dozyboy@ankor.vn",
-        "roles": ["hr", "", "   ", "finance"],
+        "system_roles": ["hr", "", "   ", "finance"],
     }
 
     ctx = resolve_session(session)
 
-    assert ctx.roles == ["hr", "finance"]
+    assert ctx.system_roles == ["hr", "finance"]
 
 
 def test_create_recipe_rejects_unexpected_tenant_like_keys() -> None:

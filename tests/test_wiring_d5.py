@@ -52,7 +52,7 @@ async def test_workbench_recipe_emits_trace_events_via_interpreter() -> None:
         llm=FixtureLLM("smoke-01"),
         embedding=EmptyEmbedding(),
         trace_writer=writer,
-        session_context=ResolvedContext(tenant_id=_ANKOR_ID, user="test-harness", roles=["public"]),
+        session_context=ResolvedContext(tenant_id=_ANKOR_ID, user="test-harness", system_roles=["public"]),
     )
 
     assert result.run_id is not None
@@ -108,7 +108,7 @@ async def test_dynamic_recipe_tool_call_node_runs_via_interpreter() -> None:
         llm=FixtureLLM("smoke-01"),
         embedding=EmptyEmbedding(),
         trace_writer=writer,
-        session_context=ResolvedContext(tenant_id=_ANKOR_ID, user="test-harness", roles=["public"]),
+        session_context=ResolvedContext(tenant_id=_ANKOR_ID, user="test-harness", system_roles=["public"]),
     )
 
     assert result.run_id is not None
