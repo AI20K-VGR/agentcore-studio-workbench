@@ -14,7 +14,6 @@ from studio_engine.interpreter import run
 
 from studio_workbench import create_recipe
 from studio_workbench.tenant_wall import ResolvedContext
-from studio_workbench.validator import graph_lint
 
 _ANKOR_ID = UUID("a0000000-0000-0000-0000-000000000001")
 
@@ -99,7 +98,9 @@ async def test_dynamic_recipe_tool_call_node_runs_via_interpreter() -> None:
         nodes=nodes,
         edges=edges,
     )
-    graph_lint(recipe)  # must pass: single path, no fan-out (kit#206 ADR-D24-01)
+    # app#44: graph_lint() removed (see validator.py module docstring) — run() never called
+    # graph_lint itself (DEC-A, run() trusts the caller already validated), so dropping this
+    # pre-check changes nothing about what this test actually exercises below.
 
     writer = _RecordingTraceWriter()
     result = await run(

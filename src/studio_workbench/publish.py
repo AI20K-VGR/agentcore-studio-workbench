@@ -139,7 +139,7 @@ from uuid import UUID
 from studio_contracts import Recipe, Scorecard
 
 from studio_workbench.protocols import DbConnection
-from studio_workbench.validator import graph_lint
+from studio_workbench.validator import enforce_agent_shape, enforce_agent_topology
 
 
 def recipe_hash(recipe: Recipe) -> str:
@@ -158,14 +158,20 @@ def recipe_hash(recipe: Recipe) -> str:
 
 
 async def publish(recipe: Recipe, scorecard: Scorecard, conn: DbConnection) -> None:
-    """Validate `recipe` (via `graph_lint`), gate-check it against `scorecard.gate.verdict`,
-    `scorecard.recipe_hash`, and `scorecard.agent_id`, then publish it to the named endpoint. A
-    missing/mismatched `recipe_hash` or an `agent_id` that disagrees with `recipe.agent_id` blocks
-    publish outright; `verdict == "FAIL"` additionally triggers a `rollback()` re-assertion of
-    whichever version was already live. Raises `ValueError` on any rejection — never returns a
-    boolean/report object, matching `graph_lint`'s own convention.
+    """Validate `recipe` (via `enforce_agent_shape` + `enforce_agent_topology`), gate-check it
+    against `scorecard.gate.verdict`, `scorecard.recipe_hash`, and `scorecard.agent_id`, then
+    publish it to the named endpoint. A missing/mismatched `recipe_hash` or an `agent_id` that
+    disagrees with `recipe.agent_id` blocks publish outright; `verdict == "FAIL"` additionally
+    triggers a `rollback()` re-assertion of whichever version was already live. Raises
+    `ValueError` on any rejection — never returns a boolean/report object.
+
+    app#44: this used to be a single `graph_lint(recipe)` call (DAG-topology, 7 rules) — REMOVED,
+    not relaxed. See `validator.py` module docstring for why (nothing left reads `recipe.dag` for
+    execution) — `enforce_agent_topology` keeps a lighter star-topology check alive for the
+    canvas-storage/display path, `enforce_agent_shape` is a new check `graph_lint` never had.
     """
-    graph_lint(recipe)
+    enforce_agent_shape(recipe)
+    enforce_agent_topology(recipe)
 
     if scorecard.recipe_hash is None:
         raise ValueError(
