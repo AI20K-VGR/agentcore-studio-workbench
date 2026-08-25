@@ -43,14 +43,14 @@ BOREA_ID = UUID("b0000000-0000-0000-0000-000000000001")
 
 
 def build_agent_config(
-    instructions: str,
+    system_prompt: str,
     model: str,
     tool_whitelist: list[str],
     temperature: float = 0.7,
 ) -> AgentConfig:
     """Tạo đối tượng AgentConfig chuẩn Pydantic v0 từ dữ liệu Form UI nhập vào."""
     return AgentConfig(
-        instructions=instructions,
+        system_prompt=system_prompt,
         model=model,
         tool_whitelist=tool_whitelist,
         temperature=temperature,
@@ -69,7 +69,7 @@ _DEFAULT_CITATION_ACCURACY_THRESHOLD = 0.95
 def create_recipe(
     agent_id: str,
     tenant_id: UUID | str,
-    instructions: str,
+    system_prompt: str,
     tool_whitelist: list[str],
     nodes: list[Node],
     edges: list[Edge],
@@ -87,7 +87,7 @@ def create_recipe(
     t_id = tenant_id if isinstance(tenant_id, UUID) else UUID(tenant_id)
 
     config = build_agent_config(
-        instructions=instructions,
+        system_prompt=system_prompt,
         model=_DEFAULT_MODEL,
         tool_whitelist=tool_whitelist,
         temperature=temperature,

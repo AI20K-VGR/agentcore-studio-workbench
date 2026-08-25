@@ -27,7 +27,7 @@ def _sample_recipe() -> Recipe:
         agent_id="agent-1",
         tenant_id=ANKOR_ID,
         agent_config=AgentConfig(
-            instructions="Answer from KB only.",
+            system_prompt="Answer from KB only.",
             model="gpt-4o-mini",
             tool_whitelist=["kb_search"],
         ),

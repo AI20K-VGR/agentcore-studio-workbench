@@ -30,6 +30,14 @@ freeze: FREEZE-READY   # chưa FROZEN — xem điều kiện còn thiếu bên d
 |---|---|---|---|---|
 | ADR-D24-01 | Luật 4 `graph_lint` **giữ chặn fan-out**. Hub-and-Spoke ở canvas là bố trí hình học; DAG xuất ra vẫn tuyến tính | Kiến trúc 1-LLM-N-tool (`engine#36`) **không** biểu diễn tool bằng cạnh DAG — LLM tự chọn tool lúc chạy qua `TOOL_CALL:`, danh sách đến từ whitelist/registry. Fan-out edge vì vậy là **sai cơ chế**, không phải "đúng nhưng chưa tới lúc". Nới luật 4 mà `_build_next_map` còn last-write-wins ⇒ recipe qua `graph_lint` rồi bị interpreter **nuốt im lặng** mọi `tool-call` trừ cái khai báo cuối: người dùng gắn 3 tool, hệ thống báo chạy thành công, 2 tool không có trong trace | repro `kit#206` (validator PR#33 + engine `main`): `graph_lint` PASS · walk `['n1','n2','t3','end']` · tool-call **bị nuốt** `['t1','t2']` · đường đi thật `routes/runs.py:122` | ✅ quyết — AIE-1 (Trần Bá Đạt) xác nhận `24/08 03:16Z`. 🟡 **điều kiện lật** cần đủ 3: interpreter duyệt nhiều nhánh · có luật gộp state · trace phản ánh nhánh song song. Nới vẫn cần tín hiệu AIE-1 bằng chữ |
 
+## D25 · 2026-08-25 — kit#217/DEC-2, `AgentConfig.instructions` → `system_prompt`
+
+| # | Quyết định | Lý do | PR / bằng chứng | Trạng thái |
+|---|---|---|---|---|
+| DL-R7 | `AgentConfig.instructions` đổi tên thành `system_prompt` (breaking, `SCHEMA_VERSION` `0.2.0-draft`→`0.3.0-draft`, DEC-2 ở `docs/decisions.md` root kit); `build_agent_config`/`create_recipe` trong `recipe.py` đổi tên tham số theo | `instructions` không phản ánh đúng vai trò field (system prompt của agent). Rollout phối hợp cross-repo (kit#217): contracts trước, workbench/engine song song, rồi apps/studio, apps/web, cuối cùng bump 5 con trỏ `kit` cùng một commit | [contracts#14](https://github.com/AI20K-VGR/agentcore-studio-contracts/pull/14) (mở) | 🟡 chờ merge |
+
+**Ghi chú `DL-R5`:** tên field `agent_config.instructions` trong lý do RLS ở D18 nay là `agent_config.system_prompt` — chỉ tên field đổi, lý do/bằng chứng RLS không đổi.
+
 ## Còn mở — chặn `FROZEN` thật sự
 
 | # | Nội dung | Chờ ai |

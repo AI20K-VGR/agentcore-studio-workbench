@@ -48,7 +48,7 @@ def _valid_recipe(*, agent_id: str = "agent-1", tenant_id: UUID = ANKOR_ID) -> R
         agent_id=agent_id,
         tenant_id=tenant_id,
         agent_config=AgentConfig(
-            instructions="Answer from KB only.",
+            system_prompt="Answer from KB only.",
             model="gpt-4o-mini",
             tool_whitelist=["kb_search"],
         ),
@@ -269,11 +269,11 @@ def test_recipe_hash_is_deterministic_regardless_of_params_key_order() -> None:
 
 
 def test_recipe_hash_changes_when_content_changes() -> None:
-    """Đối chứng bài trên — đổi 1 field bất kỳ (ở đây: `instructions`) phải đổi hash. Không đổi
+    """Đối chứng bài trên — đổi 1 field bất kỳ (ở đây: `system_prompt`) phải đổi hash. Không đổi
     thì hash không đo được gì, cùng lớp lỗi `M-G` mutation-kill mà evalhub đã pin cho `compute.py`."""
     base = _valid_recipe()
     changed = base.model_copy(
-        update={"agent_config": base.agent_config.model_copy(update={"instructions": "khác hẳn."})}
+        update={"agent_config": base.agent_config.model_copy(update={"system_prompt": "khác hẳn."})}
     )
     assert recipe_hash(base) != recipe_hash(changed)
 
@@ -338,7 +338,7 @@ async def test_publish_refuses_when_recipe_hash_does_not_match_recipe() -> None:
     conn = FakeConn()
     recipe_a = _valid_recipe()
     recipe_b = _valid_recipe().model_copy(
-        update={"agent_config": recipe_a.agent_config.model_copy(update={"instructions": "recipe B, khác hẳn."})}
+        update={"agent_config": recipe_a.agent_config.model_copy(update={"system_prompt": "recipe B, khác hẳn."})}
     )
     assert recipe_hash(recipe_a) != recipe_hash(recipe_b)  # sanity: thật sự khác nội dung
 

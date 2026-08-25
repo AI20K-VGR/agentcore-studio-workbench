@@ -21,12 +21,12 @@ from studio_workbench.tenant_wall import ResolvedContext
 def test_build_agent_config() -> None:
     """Test build_agent_config helper function."""
     config = build_agent_config(
-        instructions="System instructions",
+        system_prompt="System system_prompt",
         model="gemini-2.5-flash",
         tool_whitelist=["kb_search"],
         temperature=0.5,
     )
-    assert config.instructions == "System instructions"
+    assert config.system_prompt == "System system_prompt"
     assert config.model == "gemini-2.5-flash"
     assert config.tool_whitelist == ["kb_search"]
     assert config.temperature == 0.5
@@ -45,7 +45,7 @@ def test_create_recipe_2_nodes() -> None:
     recipe = create_recipe(
         agent_id="agent-2-nodes",
         tenant_id=ANKOR_ID,
-        instructions="Direct LLM chat without KB",
+        system_prompt="Direct LLM chat without KB",
         tool_whitelist=[],
         nodes=nodes,
         edges=edges,
@@ -82,7 +82,7 @@ def test_create_recipe_3_nodes_with_kb() -> None:
     recipe = create_recipe(
         agent_id="agent-3-nodes-kb",
         tenant_id=ANKOR_ID,
-        instructions="Search KB then answer",
+        system_prompt="Search KB then answer",
         tool_whitelist=["kb_search"],
         nodes=nodes,
         edges=edges,
@@ -113,7 +113,7 @@ def test_default_golden_set_ref_points_to_golden_30() -> None:
     r_dynamic = create_recipe(
         agent_id="agent-golden-ref-check",
         tenant_id=ANKOR_ID,
-        instructions="inst",
+        system_prompt="inst",
         tool_whitelist=[],
         nodes=nodes,
         edges=edges,
@@ -144,7 +144,7 @@ async def test_recipe_wiring_to_interpreter() -> None:
     recipe = create_recipe(
         agent_id="agent-2-nodes-wiring",
         tenant_id=ANKOR_ID,
-        instructions="Direct answer",
+        system_prompt="Direct answer",
         tool_whitelist=[],
         nodes=nodes,
         edges=edges,

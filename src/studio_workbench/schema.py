@@ -36,7 +36,7 @@ rule from `core.jobs`/`core.outbox` — R-SPEC A1, Decision #4 — is about FKs 
 boundaries, not same-schema ones).
 
 RLS (kit#117, Q7 — signed off via `packages/kb/docs/mini-rfc-tenant-schema-unify.md` item B):
-both tables hold tenant IP (`agent_config.instructions`, `kb_binding.scope`) with a real user-read
+both tables hold tenant IP (`agent_config.system_prompt`, `kb_binding.scope`) with a real user-read
 path once `publish()`/`rollback()` land, so they get the same fence `kb.chunks` already has
 (`studio_kb/schema.py`) — `ENABLE`+`FORCE ROW LEVEL SECURITY` plus a `USING`+`WITH CHECK` policy
 keyed off `NULLIF(current_setting('app.tenant_id', true), '')::uuid`: an unset/empty session

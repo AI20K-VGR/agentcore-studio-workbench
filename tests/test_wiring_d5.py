@@ -35,7 +35,7 @@ async def test_workbench_recipe_emits_trace_events_via_interpreter() -> None:
     recipe = create_recipe(
         agent_id="agent-callisto-d4",
         tenant_id=_ANKOR_ID,
-        instructions="Tra cứu quy trình và bảo mật Callisto.",
+        system_prompt="Tra cứu quy trình và bảo mật Callisto.",
         tool_whitelist=[],
         nodes=[
             Node(id="n1", type=NodeType.KB_RETRIEVE, params={"top_k": 3}),
@@ -94,7 +94,7 @@ async def test_dynamic_recipe_tool_call_node_runs_via_interpreter() -> None:
     recipe = create_recipe(
         agent_id="agent-tool-call-coverage",
         tenant_id=_ANKOR_ID,
-        instructions="x",
+        system_prompt="x",
         tool_whitelist=["calculator"],
         nodes=nodes,
         edges=edges,
