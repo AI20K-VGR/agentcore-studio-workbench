@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS wb.recipes (
     status TEXT NOT NULL DEFAULT 'draft',
     recipe_hash TEXT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (agent_id, tenant_id, version)
 );
 
@@ -84,6 +85,10 @@ CREATE TABLE IF NOT EXISTS wb.recipe_versions (
 -- không cần hỏi "row cũ nhận giá trị gì" như khuôn `NOT NULL` các cột khác trong file này đã đặt ra.
 ALTER TABLE wb.recipes ADD COLUMN IF NOT EXISTS recipe_hash TEXT NULL;
 ALTER TABLE wb.recipe_versions ADD COLUMN IF NOT EXISTS recipe_hash TEXT NULL;
+
+-- Team ERD (docs/design/ERD.png) đặt sẵn cột này cho wb.recipes — cùng đường thứ hai như
+-- recipe_hash ở trên cho DB đã tồn tại từ trước.
+ALTER TABLE wb.recipes ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
 
 ALTER TABLE wb.recipes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE wb.recipes FORCE ROW LEVEL SECURITY;
