@@ -201,7 +201,8 @@ async def publish(recipe: Recipe, scorecard: Scorecard, conn: DbConnection) -> N
     next_version = (row[0] if row is not None else 0) + 1
 
     await conn.execute(
-        "UPDATE wb.recipes SET status = 'draft', updated_at = now() WHERE agent_id = %s AND tenant_id = %s AND status = 'published'",
+        "UPDATE wb.recipes SET status = 'draft', updated_at = now() "
+        "WHERE agent_id = %s AND tenant_id = %s AND status = 'published'",
         (recipe.agent_id, recipe.tenant_id),
     )
 
@@ -301,7 +302,8 @@ async def rollback(agent_id: str, tenant_id: UUID, *, to_version: int, conn: DbC
         )
 
     await conn.execute(
-        "UPDATE wb.recipes SET status = 'rolled_back', updated_at = now() WHERE agent_id = %s AND tenant_id = %s AND status = 'published'",
+        "UPDATE wb.recipes SET status = 'rolled_back', updated_at = now() "
+        "WHERE agent_id = %s AND tenant_id = %s AND status = 'published'",
         (agent_id, tenant_id),
     )
 
