@@ -156,7 +156,7 @@ class _DevSessionContext:
 
     tenant_id: UUID
     user: str
-    roles: list[str]
+    system_roles: list[str]
 
 
 _TRACE_WRITER = InMemoryTraceWriter()
@@ -220,12 +220,14 @@ async def _execute_run(recipe: Recipe) -> interpreter.RunResult:
     # Hướng B (sau, #112): thêm 1 kênh chọn vai phiên tách khỏi `section_roles` recipe khai (vd query
     # param riêng) — lúc đó mới demo được T6 thật trên chính playground này.
     session = resolve_session(
-        {"tenant_id": recipe.tenant_id, "user": "playground-dev-user", "roles": list(SECTION_VOCAB)}
+        {"tenant_id": recipe.tenant_id, "user": "playground-dev-user", "system_roles": list(SECTION_VOCAB)}
     )
     # `_DevSessionContext` thay vì dùng thẳng `ResolvedContext` (dù nó đã khớp
     # Protocol) — tách riêng để chỗ dev-stub (docstring ở trên) đứng MỘT nơi,
     # không lẫn với `tenant_wall.resolve_session`'s hợp đồng thật (P7 seam).
-    session_context = _DevSessionContext(tenant_id=session.tenant_id, user=session.user, roles=session.roles)
+    session_context = _DevSessionContext(
+        tenant_id=session.tenant_id, user=session.user, system_roles=session.system_roles
+    )
     return await interpreter.run(
         recipe,
         session_context=session_context,

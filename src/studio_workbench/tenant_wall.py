@@ -183,19 +183,24 @@ def resolve_session(session: object) -> ResolvedContext:
 
     # Resolve system_roles — least-privilege default (empty list is safe). `roles` kept as a
     # legacy fallback key (same alias pattern as tenant/tenant_id and user/sub above) so any
-    # caller still building the old dict shape doesn't silently regress to [].
+    # caller still building the old dict shape doesn't silently regress to []. Only STOP at a
+    # key once it yields a real list/str value — a key that exists but holds an invalid shape
+    # (e.g. `system_roles: None`) must fall through to the next candidate key, not short-circuit
+    # to the [] default while a valid `roles`/`scope` sits right behind it (review workbench#46).
     system_roles: list[str] = []
     for key in ("system_roles", "roles", "scope"):
         try:
             raw = session[key]  # type: ignore[index]
-            if isinstance(raw, list):
-                system_roles = [str(r).strip() for r in raw if str(r).strip()]
-            elif isinstance(raw, str) and raw.strip():
-                # OAuth2 scope string: "read write admin" → ["read", "write", "admin"]
-                system_roles = [r.strip() for r in raw.split() if r.strip()]
-            break
         except (KeyError, TypeError):  # fmt: skip
             continue
+
+        if isinstance(raw, list):
+            system_roles = [str(r).strip() for r in raw if str(r).strip()]
+            break
+        if isinstance(raw, str) and raw.strip():
+            # OAuth2 scope string: "read write admin" → ["read", "write", "admin"]
+            system_roles = [r.strip() for r in raw.split() if r.strip()]
+            break
 
     return ResolvedContext(tenant_id=tenant_id, user=user_str, system_roles=system_roles)
 
