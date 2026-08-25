@@ -216,12 +216,33 @@ def test_resolve_session_filters_blank_entries_out_of_roles_list() -> None:
     session = {
         "tenant_id": ANKOR_ID,
         "user": "dozyboy@ankor.vn",
-        "roles": ["hr", "", "   ", "finance"],
+        "system_roles": ["hr", "", "   ", "finance"],
     }
 
     ctx = resolve_session(session)
 
-    assert ctx.roles == ["hr", "finance"]
+    assert ctx.system_roles == ["hr", "finance"]
+
+
+def test_resolve_session_falls_through_to_legacy_roles_when_system_roles_invalid() -> None:
+    """Harden (review workbench#46): `system_roles` is the primary key, `roles` a legacy
+    fallback — but only when `system_roles` is genuinely ABSENT. A session that carries
+    `system_roles` with an invalid shape (e.g. `None`, a pre-rename caller that set the
+    new key without migrating its value) must fall through to the next candidate key
+    instead of short-circuiting to the least-privilege `[]` default while a valid legacy
+    `roles` value sits right behind it. Pins the bug found in review: the resolution loop
+    used to `break` as soon as a key existed at all, valid or not.
+    """
+    session = {
+        "tenant_id": ANKOR_ID,
+        "user": "dozyboy@ankor.vn",
+        "system_roles": None,
+        "roles": ["hr", "finance"],
+    }
+
+    ctx = resolve_session(session)
+
+    assert ctx.system_roles == ["hr", "finance"]
 
 
 def test_create_recipe_rejects_unexpected_tenant_like_keys() -> None:

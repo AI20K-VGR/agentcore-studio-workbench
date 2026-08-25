@@ -88,7 +88,7 @@ async def test_wiring_recipe_to_interpreter_entry() -> None:
         llm=FixtureLLM("smoke-01"),
         embedding=EmptyEmbedding(),
         trace_writer=_NoOpTraceWriter(),
-        session_context=ResolvedContext(tenant_id=ANKOR_ID, user="test-harness", roles=["public"]),
+        session_context=ResolvedContext(tenant_id=ANKOR_ID, user="test-harness", system_roles=["public"]),
     )
     assert result.run_id is not None
     assert "n1" in result.final_state

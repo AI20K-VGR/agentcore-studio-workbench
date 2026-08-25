@@ -133,7 +133,7 @@ async def test_protocol_cleanliness_gateway_embedding_without_interpreter_change
         llm=FixtureLLM("smoke-01"),
         embedding=mock_gateway_embedding,
         trace_writer=trace_writer,
-        session_context=ResolvedContext(tenant_id=ANKOR_ID, user="test-harness", roles=["public"]),
+        session_context=ResolvedContext(tenant_id=ANKOR_ID, user="test-harness", system_roles=["public"]),
     )
 
     assert result.run_id is not None

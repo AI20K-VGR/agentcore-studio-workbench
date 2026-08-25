@@ -42,7 +42,7 @@ OTHER_ID = UUID("b0000000-0000-0000-0000-000000000002")
 VALID_SESSION: dict[str, object] = {
     "tenant_id": ANKOR_ID,
     "user": "dozyboy@ankor.vn",
-    "roles": ["hr", "finance", "public"],
+    "system_roles": ["hr", "finance", "public"],
 }
 
 
@@ -155,7 +155,7 @@ def test_resolve_session_returns_full_context() -> None:
     assert ctx.tenant_id == ANKOR_ID
     assert isinstance(ctx.tenant_id, UUID)
     assert ctx.user == "dozyboy@ankor.vn"
-    assert ctx.roles == ["hr", "finance", "public"]
+    assert ctx.system_roles == ["hr", "finance", "public"]
 
 
 def test_resolve_session_accepts_sub_alias_for_user() -> None:
@@ -163,7 +163,7 @@ def test_resolve_session_accepts_sub_alias_for_user() -> None:
     session = {
         "tenant_id": ANKOR_ID,
         "sub": "dozyboy-jwt-sub",
-        "roles": ["public"],
+        "system_roles": ["public"],
     }
     ctx = resolve_session(session)
     assert ctx.user == "dozyboy-jwt-sub"
@@ -176,7 +176,7 @@ def test_resolve_session_roles_absent_defaults_to_empty_list() -> None:
         "user": "dozyboy@ankor.vn",
     }
     ctx = resolve_session(session)
-    assert ctx.roles == []
+    assert ctx.system_roles == []
 
 
 def test_resolve_session_roles_as_oauth2_scope_string() -> None:
@@ -187,7 +187,7 @@ def test_resolve_session_roles_as_oauth2_scope_string() -> None:
         "scope": "read write admin",
     }
     ctx = resolve_session(session)
-    assert ctx.roles == ["read", "write", "admin"]
+    assert ctx.system_roles == ["read", "write", "admin"]
 
 
 # ===========================================================================
@@ -214,7 +214,7 @@ def test_resolve_session_raises_on_blank_user() -> None:
 
 def test_resolve_session_raises_when_tenant_missing() -> None:
     """resolve_session() propagates PermissionError from resolve_tenant_id() on missing tenant."""
-    session: dict[str, object] = {"user": "dozyboy@ankor.vn", "roles": ["public"]}
+    session: dict[str, object] = {"user": "dozyboy@ankor.vn", "system_roles": ["public"]}
     with pytest.raises(PermissionError, match="tenant_id"):
         resolve_session(session)
 

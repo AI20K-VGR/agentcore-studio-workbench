@@ -156,7 +156,7 @@ async def test_recipe_wiring_to_interpreter() -> None:
         llm=FixtureLLM("smoke-01"),
         embedding=EmptyEmbedding(),
         trace_writer=_NoOpTraceWriter(),
-        session_context=ResolvedContext(tenant_id=ANKOR_ID, user="test-harness", roles=["public"]),
+        session_context=ResolvedContext(tenant_id=ANKOR_ID, user="test-harness", system_roles=["public"]),
     )
 
     assert result.run_id is not None

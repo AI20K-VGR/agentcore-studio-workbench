@@ -6,7 +6,7 @@ the WORKBENCH-side seam that resolves tenant identity from the SESSION (auth-der
 side) at the workbench API boundary — it never trusts a client-declared tenant/agent_id in a
 URL path param or request body. This is the 3-layer tenant fence (plan.md):
 
-1. **Tenant-Wall (here, P7/SWE)** — session -> resolve {tenant, user, roles}, at the workbench
+1. **Tenant-Wall (here, P7/SWE)** — session -> resolve {tenant, user, system_roles}, at the workbench
    API boundary.
    Stops T1 IDOR: a caller supplying someone else's tenant (or an agent_id belonging to another
    tenant) in the request must never be trusted — the tenant used for every downstream check
@@ -21,7 +21,7 @@ it from the session recreates T1 — this is the exact bug this seam exists to p
 INV-1 mandatory filter (fail-closed):
 - If `tenant_id` is absent or None in the session → raise `PermissionError` immediately.
 - If `user` is absent or None → raise `PermissionError` immediately.
-- `roles` defaults to `[]` when absent (empty roles is valid — least-privilege).
+- `system_roles` defaults to `[]` when absent (empty roles is valid — least-privilege).
 - The resolved tenant_id MUST be a non-empty string (NOT NULL invariant).
 
 Day 8 implementation: `resolve_tenant_id()` and `resolve_session()` read from a session mapping
@@ -49,12 +49,12 @@ class ResolvedContext:
                    Matches the `tenant_id: UUID` type used across studio_contracts
                    (Recipe, TraceEvent, KbSearch — DEC-B).
         user:      Authenticated user identifier (sub / user_id from JWT).
-        roles:     List of roles/scopes granted to this user within this tenant.
+        system_roles: List of roles/scopes granted to this user within this tenant.
     """
 
     tenant_id: UUID
     user: str
-    roles: list[str]
+    system_roles: list[str]
 
 
 # ---------------------------------------------------------------------------
@@ -138,7 +138,7 @@ def resolve_tenant_id(session: object) -> UUID:
 
 
 def resolve_session(session: object) -> ResolvedContext:
-    """Resolve the full server-side identity: {tenant_id, user, roles}.
+    """Resolve the full server-side identity: {tenant_id, user, system_roles}.
 
     Reads all three fields from the server-derived session mapping only.
     Any client-declared identity values in the request body/URL are ignored
@@ -147,12 +147,12 @@ def resolve_session(session: object) -> ResolvedContext:
     INV-1 — fail-closed:
       * `tenant_id` absent/None/blank  →  PermissionError
       * `user` absent/None/blank       →  PermissionError
-      * `roles` absent                 →  defaults to [] (least-privilege, not an error)
+      * `system_roles` absent          →  defaults to [] (least-privilege, not an error)
 
     Args:
         session: A dict-like auth-derived session mapping.
                  Expected keys: ``tenant_id`` (or ``tenant``), ``user`` (or ``sub``),
-                 ``roles`` (or ``scope`` as space-separated string).
+                 ``system_roles`` (or legacy ``roles``, or ``scope`` as space-separated string).
 
     Returns:
         :class:`ResolvedContext` with guaranteed non-empty ``tenant_id`` and ``user``.
@@ -181,21 +181,28 @@ def resolve_session(session: object) -> ResolvedContext:
     if not user_str:
         raise PermissionError("resolve_session: user is blank/empty — request rejected (INV-1 mandatory filter)")
 
-    # Resolve roles — least-privilege default (empty list is safe)
-    roles: list[str] = []
-    for key in ("roles", "scope"):
+    # Resolve system_roles — least-privilege default (empty list is safe). `roles` kept as a
+    # legacy fallback key (same alias pattern as tenant/tenant_id and user/sub above) so any
+    # caller still building the old dict shape doesn't silently regress to []. Only STOP at a
+    # key once it yields a real list/str value — a key that exists but holds an invalid shape
+    # (e.g. `system_roles: None`) must fall through to the next candidate key, not short-circuit
+    # to the [] default while a valid `roles`/`scope` sits right behind it (review workbench#46).
+    system_roles: list[str] = []
+    for key in ("system_roles", "roles", "scope"):
         try:
             raw = session[key]  # type: ignore[index]
-            if isinstance(raw, list):
-                roles = [str(r).strip() for r in raw if str(r).strip()]
-            elif isinstance(raw, str) and raw.strip():
-                # OAuth2 scope string: "read write admin" → ["read", "write", "admin"]
-                roles = [r.strip() for r in raw.split() if r.strip()]
-            break
         except (KeyError, TypeError):  # fmt: skip
             continue
 
-    return ResolvedContext(tenant_id=tenant_id, user=user_str, roles=roles)
+        if isinstance(raw, list):
+            system_roles = [str(r).strip() for r in raw if str(r).strip()]
+            break
+        if isinstance(raw, str) and raw.strip():
+            # OAuth2 scope string: "read write admin" → ["read", "write", "admin"]
+            system_roles = [r.strip() for r in raw.split() if r.strip()]
+            break
+
+    return ResolvedContext(tenant_id=tenant_id, user=user_str, system_roles=system_roles)
 
 
 __all__ = [
