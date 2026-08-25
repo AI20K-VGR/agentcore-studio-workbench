@@ -3,7 +3,7 @@
 
 Non-DB tests below drive `publish()`/`rollback()` against `FakeConn`, an in-memory double of
 `wb.recipes`/`wb.recipe_versions` honoring the exact query shapes `publish.py` issues — they pin
-the branch logic (graph_lint gate, `recipe_hash` fail-closed, `gate.verdict` gate + rollback,
+the branch logic (agent_shape_lint/agent_topology_lint gate, `recipe_hash` fail-closed, `gate.verdict` gate + rollback,
 version bookkeeping) independent of any real Postgres. The DB-backed tests at the bottom
 (`test_publish_rls_*`) exercise the actual RLS policy from `schema.py` (`B-P01` in
 `docs/test-design/GUIDE-B-recipe.md` §11) through the real `pool`/`admin_pool` fixtures
@@ -44,18 +44,23 @@ BOREA_ID = UUID("b0000000-0000-0000-0000-000000000001")
 
 
 def _valid_recipe(*, agent_id: str = "agent-1", tenant_id: UUID = ANKOR_ID) -> Recipe:
+    """app#44: star-shaped `dag` (1 `llm-step` hub + 1 `kb-retrieve` spoke directly edged to it) —
+    was `kb-retrieve -> end` (no `llm-step` at all), the OLD DAG-walk shape `graph_lint` accepted;
+    `publish()` now gates on `enforce_agent_topology` instead, which requires exactly this shape
+    (see `validator.py` module docstring). `tool_whitelist` changed `["kb_search"]` ->
+    `["calculator"]` for the same reason (`agent_shape_lint`'s `no_kb_search` rule)."""
     return Recipe(
         agent_id=agent_id,
         tenant_id=tenant_id,
         agent_config=AgentConfig(
             system_prompt="Answer from KB only.",
             model="gpt-4o-mini",
-            tool_whitelist=["kb_search"],
+            tool_whitelist=["calculator"],
         ),
         dag=Dag(
             nodes=[
                 Node(id="n1", type=NodeType.KB_RETRIEVE, params={}),
-                Node(id="n2", type=NodeType.END, params={}),
+                Node(id="n2", type=NodeType.LLM_STEP, params={}),
             ],
             edges=[Edge(from_="n1", to="n2", when=None)],
         ),
@@ -66,13 +71,21 @@ def _valid_recipe(*, agent_id: str = "agent-1", tenant_id: UUID = ANKOR_ID) -> R
 
 
 def _invalid_recipe() -> Recipe:
-    """Fails graph-lint rule 2 (dangling edge) — plain constructors, no `model_construct` back
-    door needed for this rule (`test_graph_lint.py`'s own convention: only rule 1 needs it)."""
+    """Fails `enforce_agent_topology` — a 2nd edge dangles to a node that doesn't exist, plain
+    constructors, no `model_construct` back door needed. The valid `n1 -> n2` edge is kept so
+    ONLY the dangling-edge rule (`dag.edges_are_llm_hub_spokes_only`) fails, not an earlier rule
+    in `agent_topology_lint`'s fixed order (`enforce_agent_topology` raises on the FIRST `FAIL`)."""
     return _valid_recipe().model_copy(
         update={
             "dag": Dag(
-                nodes=[Node(id="n1", type=NodeType.KB_RETRIEVE, params={})],
-                edges=[Edge(from_="n1", to="does-not-exist", when=None)],
+                nodes=[
+                    Node(id="n1", type=NodeType.KB_RETRIEVE, params={}),
+                    Node(id="n2", type=NodeType.LLM_STEP, params={}),
+                ],
+                edges=[
+                    Edge(from_="n1", to="n2", when=None),
+                    Edge(from_="n2", to="does-not-exist", when=None),
+                ],
             )
         }
     )
@@ -307,11 +320,11 @@ async def test_publish_succeeds_end_to_end_with_real_recipe_hash() -> None:
 # Non-DB: branch logic
 
 
-async def test_publish_blocks_on_graph_lint_failure() -> None:
-    """KHÓA: an invalid recipe never reaches the scorecard/DB checks at all — `graph_lint`'s
-    `ValueError` propagates unchanged, and nothing is written."""
+async def test_publish_blocks_on_topology_lint_failure() -> None:
+    """KHÓA: an invalid recipe never reaches the scorecard/DB checks at all —
+    `enforce_agent_topology`'s `ValueError` propagates unchanged, and nothing is written."""
     conn = FakeConn()
-    with pytest.raises(ValueError, match="destination"):
+    with pytest.raises(ValueError, match="edges_are_llm_hub_spokes_only"):
         await publish(_invalid_recipe(), _scorecard(verdict="PASS", recipe_hash="h1"), conn)
     assert conn.recipes == []
     assert conn.scorecards == []
