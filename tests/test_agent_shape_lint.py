@@ -105,10 +105,16 @@ def test_tool_whitelist_duplicate_fails() -> None:
     assert_finding_status(findings, "tool_whitelist.no_duplicates", "FAIL")
 
 
-def test_tool_whitelist_kb_search_fails() -> None:
+# engine#49 — đảo A4: `kb_search` giờ là 1 phần tử BÌNH THƯỜNG của `tool_whitelist` (đúng
+# `PROJECT-SCOPE-DEMO-DAY30.md`), không còn rule `tool_whitelist.no_kb_search` cấm khai nó (đã xoá
+# khỏi `validator.py`) — test cũ `test_tool_whitelist_kb_search_fails` (khẳng định FAIL) bị thay
+# bằng test này (khẳng định recipe có `kb_search` trong whitelist qua lint sạch, giống mọi tool
+# khác) chứ không xoá trắng, để hành vi đảo A4 có 1 bài khoá thật.
+def test_tool_whitelist_with_kb_search_passes_every_rule() -> None:
     recipe = _valid_recipe(agent_config=AgentConfig(system_prompt="hi", model="m", tool_whitelist=["kb_search"]))
     findings = agent_shape_lint(recipe)
-    assert_finding_status(findings, "tool_whitelist.no_kb_search", "FAIL")
+    assert all(f["status"] == "OK" for f in findings), findings
+    enforce_agent_shape(recipe)  # must not raise
 
 
 def test_kb_id_blank_fails() -> None:
