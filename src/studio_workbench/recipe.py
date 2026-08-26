@@ -18,10 +18,18 @@ chiếu trong test của chính package + 1 script rời `scripts/smoke_eval_d6.
 không còn caller production nào (`eval_adapter.py::certified_recipe()` chuyển sang `create_recipe`
 với DAG cố định). `create_recipe` là builder Form-Feed thật duy nhất còn lại.
 
-`create_recipe` (đổi tên từ `create_dynamic_recipe`): `model`, `kb_id`/`scope`,
+`create_recipe` (đổi tên từ `create_dynamic_recipe`): `model`,
 `success_threshold`/`citation_accuracy_threshold` không còn là tham số động — cố định trong
 hàm (quyết định nền tảng, không cho client tùy chỉnh). `temperature` là tham số động mới,
 input thật của người dùng, forward vào `AgentConfig`.
+
+`kb_binding` mở lại thành tham số động 2026-08-26 (kit#239 — scan xác nhận canvas không set
+được dù chỉ 1 KB vì hardcode ở đây, không phải chỗ nào khác). Optional, giữ mặc định cũ
+(`kb-callisto-v1`/`ankor/public`) khi caller không truyền — additive, không phải rename, nên
+KHÔNG cần mini-RFC 4 chữ ký (không đụng `packages/contracts`, shape `KbBinding` nguyên vẹn số
+ít như hôm nay). Việc nới `KbBinding` thành N `section_role` là phạm vi riêng của
+`kit#239` Q2 (mini-RFC `packages/contracts`, chưa đủ chữ ký) — tham số này chỉ mở lại đường
+truyền cho shape singular hiện có, không tự ý đi trước Q2.
 """
 
 from __future__ import annotations
@@ -75,14 +83,19 @@ def create_recipe(
     edges: list[Edge],
     temperature: float = 0.7,
     golden_set_ref: str = "callisto-golden-30-v1",
+    kb_binding: KbBinding | None = None,
 ) -> Recipe:
     """Khởi tạo một Recipe động hoàn toàn từ danh sách Nodes và Edges do UI kéo thả truyền vào.
 
     Hỗ trợ số lượng node ngẫu nhiên (2 node, 3 node, hay N node) kết nối tùy ý dưới dạng đồ thị DAG.
 
-    `model`, KB binding (`kb_id`/`scope`), và ngưỡng eval (`success`/`citation_accuracy`) là
-    quyết định nền tảng cố định — không nhận từ client. `temperature` là input thật của
-    người dùng, tự nhập/tự cấu hình.
+    `model` và ngưỡng eval (`success`/`citation_accuracy`) là quyết định nền tảng cố định —
+    không nhận từ client. `temperature` là input thật của người dùng, tự nhập/tự cấu hình.
+
+    `kb_binding`: optional, mặc định `kb-callisto-v1`/`ankor/public` (hành vi cũ, không đổi)
+    khi caller không truyền — client (canvas) giờ TRUYỀN ĐƯỢC `KbBinding` thật thay vì luôn
+    dính cứng bộ demo. Shape vẫn số ít, đúng `packages/contracts` hôm nay; N-KB (kit#239 Q2)
+    là việc riêng, chưa tới lượt ở đây.
     """
     t_id = tenant_id if isinstance(tenant_id, UUID) else UUID(tenant_id)
 
@@ -93,7 +106,7 @@ def create_recipe(
         temperature=temperature,
     )
 
-    kb_bind = KbBinding(kb_id=_DEFAULT_KB_ID, scope=_DEFAULT_SCOPE)
+    kb_bind = kb_binding if kb_binding is not None else KbBinding(kb_id=_DEFAULT_KB_ID, scope=_DEFAULT_SCOPE)
 
     return Recipe(
         agent_id=agent_id,

@@ -121,6 +121,58 @@ def test_default_golden_set_ref_points_to_golden_30() -> None:
     assert r_dynamic.golden_set_ref == "callisto-golden-30-v1"
 
 
+def test_create_recipe_accepts_explicit_kb_binding() -> None:
+    """kit#239 finding: `create_recipe` used to hardcode `KbBinding`, so canvas could not set
+    even 1 KB — `kb_binding` is now an optional caller-supplied param, additive (default
+    unchanged), no `packages/contracts` shape change."""
+    from studio_contracts import KbBinding
+
+    nodes = [
+        Node(id="n1", type=NodeType.KB_RETRIEVE, params={"query": "HR policy"}),
+        Node(id="n2", type=NodeType.LLM_STEP, params={"temperature": 0.0}),
+        Node(id="n3", type=NodeType.END, params={}),
+    ]
+    edges = [
+        Edge(from_="n1", to="n2"),
+        Edge(from_="n2", to="n3"),
+    ]
+
+    recipe = create_recipe(
+        agent_id="agent-hr-kb",
+        tenant_id=ANKOR_ID,
+        system_prompt="Search HR KB then answer",
+        tool_whitelist=["kb_search"],
+        nodes=nodes,
+        edges=edges,
+        kb_binding=KbBinding(kb_id="kb-hr-v1", scope="hr"),
+    )
+
+    assert recipe.kb_binding.kb_id == "kb-hr-v1"
+    assert recipe.kb_binding.scope == "hr"
+
+
+def test_create_recipe_kb_binding_default_unchanged_when_omitted() -> None:
+    """Omitting `kb_binding` must reproduce the exact pre-fix hardcoded default — additive,
+    not a behavior change for existing callers."""
+    nodes = [
+        Node(id="n1", type=NodeType.LLM_STEP, params={}),
+        Node(id="n2", type=NodeType.END, params={}),
+    ]
+    edges = [Edge(from_="n1", to="n2")]
+
+    recipe = create_recipe(
+        agent_id="agent-default-kb",
+        tenant_id=ANKOR_ID,
+        system_prompt="inst",
+        tool_whitelist=[],
+        nodes=nodes,
+        edges=edges,
+    )
+
+    assert recipe.kb_binding.kb_id == "kb-callisto-v1"
+    assert recipe.kb_binding.scope == "ankor/public"
+
+
 class _NoOpTraceWriter:
     """Conforming no-op TraceWriter seam for wiring tests."""
 
