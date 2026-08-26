@@ -91,9 +91,21 @@ def with_kb_search_whitelisted(recipe: Recipe) -> Recipe:
     the LLM is never told `kb_search` exists, so it fabricates an ungrounded answer instead of
     erroring (`used_kb_search` stays `False`, so the A5 `refused` formula never fires either). This
     function is the pure "does this recipe need the fix" + "apply it" primitive the backfill script
-    calls per row; only recipes with an actual `kb-retrieve` node get touched (mirrors
-    `apps/web/src/recipe/fromCanvas.ts::deriveToolWhitelist()`'s derivation — a recipe with 0
-    `kb-retrieve` nodes never gets `kb_search` added, same as a fresh canvas build would produce).
+    calls per row; only recipes with an actual `kb-retrieve` node get touched — a recipe with 0
+    `kb-retrieve` nodes never gets `kb_search` added, same principle
+    `apps/web/src/recipe/fromCanvas.ts::deriveToolWhitelist()` uses for `calculator`/
+    `current_datetime` (derive from canvas node presence, not a client-declared array).
+
+    **This only actually MATCHES what `deriveToolWhitelist()` produces once
+    `agentcore-studio-web#52` is included in whatever `apps/web` commit is checked out** (review
+    dholmes0207 on `agentcore-studio-app`'s backfill-script PR, F1): before #52,
+    `deriveToolWhitelist()` derives `tool_whitelist` ONLY from `tool-call` nodes, never from
+    `kb-retrieve` — so a canvas re-publish of an already-backfilled recipe on a pre-#52 `apps/web`
+    silently drops `kb_search` again (`buildRecipe()` re-derives the whole whitelist from scratch,
+    it does not read back whatever was already stored). The backfill script's own docstring names
+    the required bump order (`apps/web` ≥ #52 BEFORE running `--execute`, BEFORE bumping
+    `packages/engine` to the A4-reversed commit) — this function's contract does not depend on that
+    ordering, only the surrounding operational sequence does.
 
     Prepended (not appended) to match the old engine-side ordering (`agent_loop.py`'s retired
     `tool_names = [KB_SEARCH_TOOL, *whitelist]`) — purely cosmetic (list order carries no semantic
