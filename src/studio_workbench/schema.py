@@ -45,7 +45,26 @@ rather than raising or leaking. `FORCE` makes this bite `studio_owner` too, not 
 — matters here because `ensure_all_schemas()` runs this DDL via the admin pool.
 
 Idempotent throughout (`CREATE SCHEMA/TABLE IF NOT EXISTS`) — safe to call twice, which is what
-`packages/workbench/tests/test_schema.py::test_wb_ddl_idempotent` locks.
+`packages/workbench/tests/test_wb_schema.py::test_wb_ddl_idempotent` locks.
+
+`wb.conversations` / `wb.conversation_messages` (workbench#49, `kit#240` tracking issue —
+multi-turn chat history + context-window control for the chat agent): storage-only half of that
+flow. `POST /chat` today only ever writes `obs.trace_events` (audit, keyed by run/node) — there is
+no per-turn Q/A record keyed by a `conversation_id` that a caller can read back sequentially (UI
+re-hydrate on page reload, `apps/web#28`) or replay into the next turn's prompt (`history` param,
+`engine#47`, a pure function change with no DB access of its own). `wb.conversations` is the
+parent row (one per chat session, `agent_id` + `tenant_id`); `wb.conversation_messages` is one row
+per turn, `UNIQUE (conversation_id, turn_index)` so `apps/studio#74`'s write path can safely reject
+two concurrent requests racing to write the same turn number instead of silently duplicating it.
+`run_id` (nullable) is a soft back-reference to `obs.trace_events.run_id` for that turn — audit
+convenience only, not a FK (an `obs` row can be pruned/rotated independently of chat history).
+`citations` is `JSONB` (nullable) — shape owned by whatever `apps/studio#74` writes there, not by
+this schema.
+
+Same RLS fence as `wb.recipes` above (`ENABLE`+`FORCE ROW LEVEL SECURITY`, tenant-keyed
+`USING`/`WITH CHECK` policy) — both tables hold real conversation content per tenant. This DDL is
+schema-only: no `apps/studio`/`engine` code reads or writes these tables yet (that lands in the
+sibling sub-issues once this lands and its pointer bumps in `kit`).
 """
 
 from __future__ import annotations
@@ -105,9 +124,46 @@ DROP POLICY IF EXISTS wb_recipe_versions_tenant_isolation ON wb.recipe_versions;
 CREATE POLICY wb_recipe_versions_tenant_isolation ON wb.recipe_versions
     USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)
     WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
+
+CREATE TABLE IF NOT EXISTS wb.conversations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL,
+    agent_id TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS wb.conversation_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    conversation_id UUID NOT NULL REFERENCES wb.conversations (id) ON DELETE CASCADE,
+    tenant_id UUID NOT NULL,
+    turn_index INT NOT NULL,
+    question TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    citations JSONB,
+    run_id TEXT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (conversation_id, turn_index)
+);
+
+ALTER TABLE wb.conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE wb.conversations FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS wb_conversations_tenant_isolation ON wb.conversations;
+CREATE POLICY wb_conversations_tenant_isolation ON wb.conversations
+    USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)
+    WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
+
+ALTER TABLE wb.conversation_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE wb.conversation_messages FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS wb_conversation_messages_tenant_isolation ON wb.conversation_messages;
+CREATE POLICY wb_conversation_messages_tenant_isolation ON wb.conversation_messages
+    USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)
+    WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
 """
 
 
 def ddl() -> str:
-    """Return this quadrant's idempotent DDL (`wb.recipes` + `wb.recipe_versions`)."""
+    """Return this quadrant's idempotent DDL (`wb.recipes` + `wb.recipe_versions` +
+    `wb.conversations` + `wb.conversation_messages`)."""
     return _WB_DDL
