@@ -65,12 +65,6 @@ from collections.abc import Callable, Iterable
 
 from studio_contracts import NodeType, Recipe
 
-# Bản sao literal của `studio_engine.agent_protocol.KB_SEARCH_TOOL` — package này KHÔNG (và không
-# nên) phụ thuộc `agentcore-studio-engine` (xem docstring module ở trên: workbench chỉ phụ thuộc
-# `agentcore-studio-contracts`). Đổi 1 bên thì phải đổi cả 2 — cùng idiom "accepted duplication"
-# `agent_loop.py` đã dùng cho `_CITATION_RE`/belt-1-belt-2.
-_KB_SEARCH_TOOL = "kb_search"
-
 _ALLOWED_TOPOLOGY_TYPES = frozenset({NodeType.LLM_STEP, NodeType.KB_RETRIEVE, NodeType.TOOL_CALL})
 
 
@@ -125,13 +119,11 @@ def agent_shape_lint(recipe: Recipe) -> list[dict[str, str]]:
     tool_dupes = _find_duplicates(whitelist)
     findings.append(_finding("tool_whitelist.no_duplicates", not tool_dupes, lambda: f"trùng: {sorted(tool_dupes)}"))
 
-    findings.append(
-        _finding(
-            "tool_whitelist.no_kb_search",
-            _KB_SEARCH_TOOL not in whitelist,
-            lambda: "kb_search luôn khả dụng (A4, run_agent_loop), không cần/không nên khai trong tool_whitelist",
-        )
-    )
+    # engine#49 — đảo A4: `kb_search` giờ là 1 phần tử BÌNH THƯỜNG của `tool_whitelist`, cùng cấp với
+    # `calculator`/`current_datetime` (đúng `PROJECT-SCOPE-DEMO-DAY30.md`), không còn rule cấm khai
+    # nó ở đây. Rule `tool_whitelist.no_kb_search` (chặn `kb_search` xuất hiện trong whitelist, dựa
+    # trên A4 "kb_search luôn khả dụng") đã bị XOÁ — `run_agent_loop()` (`agent_loop.py`) giờ gate
+    # `kb_search` qua whitelist giống mọi tool khác, không còn hard-code luôn bật.
 
     findings.append(
         _finding(
