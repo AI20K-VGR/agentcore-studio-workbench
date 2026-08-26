@@ -7,8 +7,11 @@ Replaces `test_graph_lint.py` (deleted — `graph_lint()` itself is removed, see
 
 from __future__ import annotations
 
+import importlib.util
+import sys
+from pathlib import Path
+
 import pytest
-from conftest import ANKOR_ID, assert_finding_status
 from studio_contracts import (
     AgentConfig,
     Dag,
@@ -20,6 +23,29 @@ from studio_contracts import (
 )
 
 from studio_workbench.validator import agent_shape_lint, enforce_agent_shape
+
+# Nạp `conftest.py` của CHÍNH thư mục này theo ĐƯỜNG DẪN TƯỜNG MINH, không `from conftest import`.
+#
+# `tests/` không phải package (không có `__init__.py`), nên pytest chèn thư mục chứa file test vào
+# `sys.path` — và trong một lượt chạy cả workspace, `packages/kb/tests/embedding-tests/` cũng được
+# chèn y hệt. Tên module `conftest` bị tranh chấp, bên nào vào `sys.modules` trước thì thắng:
+#
+#     ImportError: cannot import name 'ANKOR_ID' from 'conftest'
+#       (/…/packages/kb/tests/embedding-tests/conftest.py)
+#
+# Hai file này XANH khi chạy `pytest packages/workbench/tests` và ĐỎ khi chạy `pytest` ở gốc kit —
+# và CI không thấy, vì job `test (agentcore-studio-workbench, packages/workbench/tests)` chỉ chạy
+# đúng thư mục này. Nạp theo đường dẫn thì không phụ thuộc `sys.path`, nên không phụ thuộc thứ tự
+# thu thập. (Cùng lớp lỗi + cùng bản vá với kit#245.)
+_CONFTEST = Path(__file__).resolve().parent / "conftest.py"
+_spec = importlib.util.spec_from_file_location("workbench_tests_conftest", _CONFTEST)
+assert _spec is not None and _spec.loader is not None
+_conftest = importlib.util.module_from_spec(_spec)
+sys.modules["workbench_tests_conftest"] = _conftest
+_spec.loader.exec_module(_conftest)
+
+ANKOR_ID = _conftest.ANKOR_ID
+assert_finding_status = _conftest.assert_finding_status
 
 # Star-shaped dag — shape-lint doesn't read this, but `Recipe.dag` is a required field.
 _MINIMAL_DAG = Dag(nodes=[Node(id="llm-1", type=NodeType.LLM_STEP, params={})], edges=[])
