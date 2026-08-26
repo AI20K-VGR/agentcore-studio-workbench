@@ -12,16 +12,18 @@ from uuid import UUID
 
 from studio_contracts import AgentConfig, Dag, Edge, KbBinding, Node, NodeType, Recipe, ScorecardThreshold
 
-from studio_workbench.recipe_ops import with_query, without_query
+from studio_workbench.recipe_ops import with_kb_search_whitelisted, with_query, without_query
 
 ANKOR_ID = UUID("a0000000-0000-0000-0000-000000000001")
 
 
-def _recipe(nodes: list[Node], edges: list[Edge]) -> Recipe:
+def _recipe(nodes: list[Node], edges: list[Edge], tool_whitelist: list[str] | None = None) -> Recipe:
     return Recipe(
         agent_id="agent-1",
         tenant_id=ANKOR_ID,
-        agent_config=AgentConfig(system_prompt="Answer from KB only.", model="gpt-4o-mini", tool_whitelist=[]),
+        agent_config=AgentConfig(
+            system_prompt="Answer from KB only.", model="gpt-4o-mini", tool_whitelist=tool_whitelist or []
+        ),
         dag=Dag(nodes=nodes, edges=edges),
         kb_binding=KbBinding(kb_id="kb-1", scope="ankor/public"),
         golden_set_ref="golden-set-1",
@@ -118,6 +120,55 @@ def test_without_query_does_not_mutate_original_recipe() -> None:
     without_query(recipe)
 
     assert recipe.dag.nodes[0].params == original_params
+
+
+def test_with_kb_search_whitelisted_adds_when_kb_retrieve_node_present() -> None:
+    """KHÓA engine#49 review F1 — backfill: recipe có node `kb-retrieve` nhưng `tool_whitelist`
+    thiếu `kb_search` (hình dạng MỌI recipe publish TRƯỚC PR #57 — luật `tool_whitelist.no_kb_search`
+    cũ từ chối mọi whitelist có `kb_search`) phải nhận thêm `kb_search`, giữ nguyên tool khác."""
+    recipe = _recipe(
+        nodes=[Node(id="n1", type=NodeType.KB_RETRIEVE, params={}), Node(id="n2", type=NodeType.LLM_STEP, params={})],
+        edges=[Edge(from_="n1", to="n2", when=None)],
+        tool_whitelist=["calculator"],
+    )
+    patched = with_kb_search_whitelisted(recipe)
+    assert patched.agent_config.tool_whitelist == ["kb_search", "calculator"]
+
+
+def test_with_kb_search_whitelisted_noop_without_kb_retrieve_node() -> None:
+    """KHÓA: recipe KHÔNG có node `kb-retrieve` nào (chatbot thuần) không được nhận `kb_search` —
+    backfill chỉ vá đúng agent thật sự có nối KB, không mở rộng phạm vi tool cho agent khác."""
+    recipe = _recipe(
+        nodes=[Node(id="n1", type=NodeType.LLM_STEP, params={})],
+        edges=[],
+        tool_whitelist=["calculator"],
+    )
+    patched = with_kb_search_whitelisted(recipe)
+    assert patched.agent_config.tool_whitelist == ["calculator"]
+
+
+def test_with_kb_search_whitelisted_noop_when_already_present() -> None:
+    """KHÓA: idempotent — recipe đã có `kb_search` trong whitelist (agent publish SAU PR #57) không
+    bị nhân đôi. Cần thiết để script backfill chạy lại nhiều lần an toàn (không chỉ chạy đúng 1 lần)."""
+    recipe = _recipe(
+        nodes=[Node(id="n1", type=NodeType.KB_RETRIEVE, params={})],
+        edges=[],
+        tool_whitelist=["kb_search", "calculator"],
+    )
+    patched = with_kb_search_whitelisted(recipe)
+    assert patched.agent_config.tool_whitelist == ["kb_search", "calculator"]
+
+
+def test_with_kb_search_whitelisted_does_not_mutate_original_recipe() -> None:
+    """Cùng lời hứa 'does not mutate' với `with_query`/`without_query` — `Recipe`/`AgentConfig` đều
+    `frozen=True` nên phải trả object MỚI, recipe gốc không đổi."""
+    recipe = _recipe(
+        nodes=[Node(id="n1", type=NodeType.KB_RETRIEVE, params={})],
+        edges=[],
+        tool_whitelist=["calculator"],
+    )
+    with_kb_search_whitelisted(recipe)
+    assert recipe.agent_config.tool_whitelist == ["calculator"]
 
 
 def test_with_query_deep_copies_nested_params_not_shared_with_original() -> None:
