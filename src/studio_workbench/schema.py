@@ -29,6 +29,10 @@ A "mismatch" on a backfilled row is expected, not evidence of corruption — cro
 `updated_at` (bumped by the backfill) or the script's own printed log before treating a mismatch
 as a real problem.
 
+`updated_at` is a `wb.recipes`-only signal — `wb.recipe_versions` is append-only and has no such
+column (see its `CREATE TABLE` below), and the backfill patches BOTH tables. When checking a
+`wb.recipe_versions` row, the script's printed log is the only cross-check available.
+
 `NULL` for any row published before this column existed. `eval.scorecards` (a DIFFERENT quadrant,
 `packages/evalhub`) has no writer yet and no `recipe_hash` column of its own — tracked as
 `agentcore-studio-evalhub#28`, out of scope here.
