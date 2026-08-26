@@ -20,6 +20,15 @@ boundary. Either way, verifying a row means recomputing
 `publish.recipe_hash(Recipe.model_validate(row["recipe"]))` from the reconstructed object (safe:
 `Edge.populate_by_name=True` accepts both the aliased and unaliased key on input), never a raw
 byte/string comparison against the stored JSONB directly.
+
+engine#49 review F-minor (dholmes0207, backfill-script PR) — this recompute-and-compare procedure
+FAILS BY DESIGN for any row `apps/studio/scripts/backfill_kb_search_whitelist.py` has patched:
+that script deliberately keeps the OLD `recipe_hash` on touched rows (same accepted trade-off as
+the `instructions`→`system_prompt` rename below, DEC-2) while the `recipe` JSONB content changes.
+A "mismatch" on a backfilled row is expected, not evidence of corruption — cross-check
+`updated_at` (bumped by the backfill) or the script's own printed log before treating a mismatch
+as a real problem.
+
 `NULL` for any row published before this column existed. `eval.scorecards` (a DIFFERENT quadrant,
 `packages/evalhub`) has no writer yet and no `recipe_hash` column of its own — tracked as
 `agentcore-studio-evalhub#28`, out of scope here.
