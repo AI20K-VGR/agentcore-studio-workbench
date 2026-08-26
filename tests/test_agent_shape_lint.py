@@ -7,8 +7,9 @@ Replaces `test_graph_lint.py` (deleted — `graph_lint()` itself is removed, see
 
 from __future__ import annotations
 
+from uuid import UUID
+
 import pytest
-from conftest import ANKOR_ID, assert_finding_status
 from studio_contracts import (
     AgentConfig,
     Dag,
@@ -20,6 +21,28 @@ from studio_contracts import (
 )
 
 from studio_workbench.validator import agent_shape_lint, enforce_agent_shape
+
+# `ANKOR_ID`/`assert_finding_status` khai TẠI CHỖ, không `from conftest import` (workbench#53).
+#
+# Khớp convention 8 file khác trong package này (`test_publish.py`, `test_wb_schema.py`,
+# `test_wiring_d4/d7/d8/d9.py`, ...) — mỗi file tự khai `ANKOR_ID` riêng. Một lượt `/simplify` gom
+# hai helper này vào `conftest.py`, và hai file mới của workbench#48 đổi sang `from conftest import`.
+#
+# Vấn đề: workspace có 6 file `conftest.py` và `tests/` không phải package, nên tên module `conftest`
+# bị tranh chấp — bên nào vào `sys.modules` trước thì thắng. Hai triệu chứng đo được:
+#
+#   mypy packages apps   ->  Module "conftest" has no attribute "ANKOR_ID"   (job `lint` của kit)
+#   pytest (gốc kit)     ->  ImportError lúc thu thập, ABORT cả lượt chạy
+#
+# Cả hai VÔ HÌNH với CI của repo con: job ở đây chỉ chạy `packages/workbench`, nơi không có
+# `conftest` nào tranh chấp. Duplicate hai dòng rẻ hơn hẳn mọi cách đi vòng.
+ANKOR_ID = UUID("a0000000-0000-0000-0000-000000000001")
+
+
+def assert_finding_status(findings: list[dict[str, str]], rule: str, expected: str) -> None:
+    actual = next(f["status"] for f in findings if f["rule"] == rule)
+    assert actual == expected, f"{rule}: expected status {expected!r}, got {actual!r} ({findings})"
+
 
 # Star-shaped dag — shape-lint doesn't read this, but `Recipe.dag` is a required field.
 _MINIMAL_DAG = Dag(nodes=[Node(id="llm-1", type=NodeType.LLM_STEP, params={})], edges=[])
