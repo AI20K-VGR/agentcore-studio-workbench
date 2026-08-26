@@ -77,14 +77,6 @@ def test_agent_id_blank_fails() -> None:
     assert_finding_status(findings, "agent_id.non_blank", "FAIL")
 
 
-def test_system_prompt_blank_fails() -> None:
-    recipe = _valid_recipe(
-        agent_config=AgentConfig(system_prompt="  ", model="gpt-4o-mini", tool_whitelist=["calculator"])
-    )
-    findings = agent_shape_lint(recipe)
-    assert_finding_status(findings, "agent_config.system_prompt_non_blank", "FAIL")
-
-
 def test_model_blank_fails() -> None:
     recipe = _valid_recipe(agent_config=AgentConfig(system_prompt="hi", model="  ", tool_whitelist=["calculator"]))
     findings = agent_shape_lint(recipe)

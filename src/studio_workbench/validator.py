@@ -105,13 +105,10 @@ def agent_shape_lint(recipe: Recipe) -> list[dict[str, str]]:
         _finding("agent_id.non_blank", bool(recipe.agent_id.strip()), lambda: "agent_id rỗng hoặc chỉ có khoảng trắng")
     )
 
-    findings.append(
-        _finding(
-            "agent_config.system_prompt_non_blank",
-            bool(recipe.agent_config.system_prompt.strip()),
-            lambda: "system_prompt rỗng hoặc chỉ có khoảng trắng",
-        )
-    )
+    # workbench#55 — `system_prompt` không còn field cấu hình được ở frontend nữa (agentcore-
+    # studio-web#48), luôn gửi rỗng. `packages/engine` đã coi rỗng là case hợp lệ, an toàn từ
+    # trước (`executors.py::build_prompt()`, `agent_protocol.py`) — luật "không được rỗng" này
+    # (kit#243) bị bỏ, không phải nới lỏng tạm thời. Mirror: `apps/web/src/recipe/graphLint.ts`.
     findings.append(
         _finding(
             "agent_config.model_non_blank",
