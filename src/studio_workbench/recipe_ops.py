@@ -69,3 +69,53 @@ def without_query(recipe: Recipe) -> Recipe:
     eval run (one recipe object reused across all golden-set cases, `query` injected per-case via
     `with_query` at the call site) — see `eval_adapter.py::EngineAgentRunner.certified_recipe`."""
     return _map_kb_retrieve_params(recipe, lambda params: {k: v for k, v in params.items() if k != _QUERY_KEY})
+
+
+_KB_SEARCH_TOOL = "kb_search"
+
+
+def with_kb_search_whitelisted(recipe: Recipe) -> Recipe:
+    """engine#49 (A4 reversed) — return a copy of `recipe` with `"kb_search"` PREPENDED to
+    `agent_config.tool_whitelist` if `recipe.dag.nodes` contains at least one `kb-retrieve` node AND
+    it is not already there; otherwise returns an equal-content copy unchanged (same no-op contract
+    as `with_query`/`without_query` above — never raises, safe on any valid `Recipe`).
+
+    Backfill use (`apps/studio/scripts/backfill_kb_search_whitelist.py`, review dholmes0207 on
+    `agentcore-studio-engine#50`, PR #50's own review thread F1): every `wb.recipes`/
+    `wb.recipe_versions` row published BEFORE `agentcore-studio-workbench#57` was STRUCTURALLY
+    unable to carry `"kb_search"` in `tool_whitelist` — the pre-#57 `agent_shape_lint` rule
+    `tool_whitelist.no_kb_search` rejected any whitelist containing it, enforced at
+    `publish.py:159`. Those rows relied on `run_agent_loop()`'s old A4 ("kb_search always
+    available, ignores whitelist") to actually search KB despite the whitelist never listing it.
+    Once the engine PR (#50) that reverses A4 lands, those SAME rows silently lose KB grounding —
+    the LLM is never told `kb_search` exists, so it fabricates an ungrounded answer instead of
+    erroring (`used_kb_search` stays `False`, so the A5 `refused` formula never fires either). This
+    function is the pure "does this recipe need the fix" + "apply it" primitive the backfill script
+    calls per row; only recipes with an actual `kb-retrieve` node get touched — a recipe with 0
+    `kb-retrieve` nodes never gets `kb_search` added, same principle
+    `apps/web/src/recipe/fromCanvas.ts::deriveToolWhitelist()` uses for `calculator`/
+    `current_datetime` (derive from canvas node presence, not a client-declared array).
+
+    **This only actually MATCHES what `deriveToolWhitelist()` produces once
+    `agentcore-studio-web#52` is included in whatever `apps/web` commit is checked out** (review
+    dholmes0207 on `agentcore-studio-app`'s backfill-script PR, F1): before #52,
+    `deriveToolWhitelist()` derives `tool_whitelist` ONLY from `tool-call` nodes, never from
+    `kb-retrieve` — so a canvas re-publish of an already-backfilled recipe on a pre-#52 `apps/web`
+    silently drops `kb_search` again (`buildRecipe()` re-derives the whole whitelist from scratch,
+    it does not read back whatever was already stored). The backfill script's own docstring names
+    the required bump order (`apps/web` ≥ #52 BEFORE running `--execute`, BEFORE bumping
+    `packages/engine` to the A4-reversed commit) — this function's contract does not depend on that
+    ordering, only the surrounding operational sequence does.
+
+    Prepended (not appended) to match the old engine-side ordering (`agent_loop.py`'s retired
+    `tool_names = [KB_SEARCH_TOOL, *whitelist]`) — purely cosmetic (list order carries no semantic
+    weight to `run_agent_loop()`), kept only so a diff of backfilled rows reads the same shape as
+    what the engine used to hand the model."""
+    has_kb_node = any(node.type is NodeType.KB_RETRIEVE for node in recipe.dag.nodes)
+    whitelist = recipe.agent_config.tool_whitelist
+    if not has_kb_node or _KB_SEARCH_TOOL in whitelist:
+        return recipe.model_copy()
+    new_whitelist = [_KB_SEARCH_TOOL, *whitelist]
+    return recipe.model_copy(
+        update={"agent_config": recipe.agent_config.model_copy(update={"tool_whitelist": new_whitelist})}
+    )
