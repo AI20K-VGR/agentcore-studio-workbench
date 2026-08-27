@@ -214,3 +214,57 @@ def test_enforce_agent_topology_raises_on_first_failure() -> None:
     dag = Dag(nodes=[], edges=[])
     with pytest.raises(ValueError, match="agent_topology_lint: dag.exactly_one_llm_node"):
         enforce_agent_topology(_recipe(dag))
+
+
+def _dag_with_tool_params(*tool_params: dict[str, object]) -> Dag:
+    """Hình sao tối thiểu với N node `tool-call`, mỗi node mang `params` tuỳ ý."""
+    nodes: list[Node] = [Node(id="llm-1", type=NodeType.LLM_STEP, params={})]
+    edges: list[Edge] = []
+    for index, params in enumerate(tool_params, start=1):
+        nodes.append(Node(id=f"tool-{index}", type=NodeType.TOOL_CALL, params=params))
+        edges.append(Edge(from_=f"tool-{index}", to="llm-1"))
+    return Dag(nodes=nodes, edges=edges)
+
+
+def test_a_node_carrying_several_tools_is_valid() -> None:
+    """Một node `tool-call` mang NHIỀU tool (`params["tools"]`, mảng) là hợp lệ.
+
+    Canvas gộp nhiều tool vào một node để agent vừa tính toán vừa xem giờ không phải thả hai node —
+    `calculator`/`current_datetime` là hai hàm thuần, không chạm dữ liệu của ai.
+
+    Luật cũ đọc `params["tool"]` (một chuỗi), nên node khai `tools` bị coi là **thiếu tool** và
+    validator chặn thẳng recipe. Đo được trên giao diện: node hiện `tools=["current_datetime"]` mà
+    chạy thử ra *"recipe không qua validator: dag.tool_call_has_non_blank_tool"*.
+
+    Bản lint ở `apps/web` đã sửa từ trước; bản này thì chưa — hai bản cùng một luật, và chỉ sửa một
+    bên nghĩa là canvas cho qua rồi server chặn, đúng loại lệch khó truy nhất."""
+    findings = agent_topology_lint(_recipe(_dag_with_tool_params({"tools": ["calculator", "current_datetime"]})))
+    assert_finding_status(findings, "dag.tool_call_has_non_blank_tool", "OK")
+
+
+def test_the_old_single_tool_shape_stays_valid() -> None:
+    """Recipe ĐÃ PUBLISH mang `tool` (một chuỗi) mãi mãi — không được bỗng dưng thành không hợp lệ."""
+    findings = agent_topology_lint(_recipe(_dag_with_tool_params({"tool": "calculator"})))
+    assert_finding_status(findings, "dag.tool_call_has_non_blank_tool", "OK")
+
+
+def test_a_node_with_no_tool_at_all_still_fails() -> None:
+    """Đối trọng: node thả ra chưa chọn gì vẫn phải bị bắt.
+
+    Thiếu vế này, "nhận cả hai hình dạng" dễ nới thành "nhận mọi thứ", và một node không làm gì cả
+    đi thẳng vào recipe đã publish."""
+    empty_shapes: list[dict[str, object]] = [{}, {"tools": []}, {"tools": ["", "  "]}]
+    for params in empty_shapes:
+        findings = agent_topology_lint(_recipe(_dag_with_tool_params(params)))
+        assert_finding_status(findings, "dag.tool_call_has_non_blank_tool", "FAIL")
+
+
+def test_duplicates_are_counted_across_every_tool_of_every_node() -> None:
+    """Trùng lặp tính trên TOÀN BỘ tool của mọi node, không chỉ tool đầu mỗi node.
+
+    Đọc một tool mỗi node sẽ bỏ lọt đúng ca dễ xảy ra nhất khi một node mang được nhiều tool: người
+    dùng tick `calculator` ở node này rồi tick lại ở node kia."""
+    findings = agent_topology_lint(
+        _recipe(_dag_with_tool_params({"tools": ["calculator"]}, {"tools": ["current_datetime", "calculator"]}))
+    )
+    assert_finding_status(findings, "dag.tool_call_no_duplicate_tools", "FAIL")

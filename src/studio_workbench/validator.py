@@ -165,6 +165,33 @@ def enforce_agent_shape(recipe: Recipe) -> None:
     _enforce("agent_shape_lint", agent_shape_lint(recipe))
 
 
+def _tools_of(params: dict[str, object]) -> list[str]:
+    """Mọi tool một node `tool-call` khai — đọc được CẢ HAI hình dạng.
+
+    Canvas gộp nhiều tool vào một node (`tools`, mảng) để agent vừa tính toán vừa xem giờ không phải
+    thả hai node — `calculator`/`current_datetime` là hai hàm thuần, không chạm dữ liệu của ai.
+
+    Nhưng recipe ĐÃ PUBLISH mang `tool` (một chuỗi) mãi mãi, nên bỏ vế cũ nghĩa là mọi agent publish
+    trước thay đổi này bỗng dưng không qua validator.
+
+    Mảng thắng khi cả hai cùng có: đó là ca chuyển tiếp (node vừa sửa mang `tools`, `tool` cũ chưa
+    bị dọn), và đọc `tool` trước sẽ bỏ lọt mọi lựa chọn mới.
+
+    Cùng luật với `apps/web::toolsOf` và `apps/studio::_tools_of`. Ba bản sao ở ba tầng, và chúng
+    PHẢI khớp: canvas cho qua rồi server chặn là loại lệch khó truy nhất — người dùng thấy node ghi
+    đúng tool trên màn hình mà chạy thử ra "recipe không qua validator"."""
+    raw = params.get("tools")
+    candidates: list[object] = list(raw) if isinstance(raw, list) else [params.get("tool")]
+    tools: list[str] = []
+    for item in candidates:
+        if not isinstance(item, str):
+            continue
+        tool = item.strip()
+        if tool and tool not in tools:
+            tools.append(tool)
+    return tools
+
+
 def agent_topology_lint(recipe: Recipe) -> list[dict[str, str]]:
     """Star-topology check for `recipe.dag` — does NOT read `agent_config`/`kb_binding`/etc.
 
@@ -254,19 +281,20 @@ def agent_topology_lint(recipe: Recipe) -> list[dict[str, str]]:
         )
     )
 
-    tool_names_by_node = {node.id: node.params.get("tool") for node in tool_nodes}
-    blank_tool_nodes = [
-        node_id for node_id, tool in tool_names_by_node.items() if not isinstance(tool, str) or not tool.strip()
-    ]
+    tools_by_node = {node.id: _tools_of(node.params) for node in tool_nodes}
+    blank_tool_nodes = [node_id for node_id, tools in tools_by_node.items() if not tools]
     findings.append(
         _finding(
             "dag.tool_call_has_non_blank_tool",
             not blank_tool_nodes,
-            lambda: f"node tool-call thiếu/rỗng params['tool']: {blank_tool_nodes}",
+            lambda: f"node tool-call chưa chọn tool nào: {blank_tool_nodes}",
         )
     )
 
-    named_tools = [tool for tool in tool_names_by_node.values() if isinstance(tool, str) and tool.strip()]
+    # Trùng lặp tính trên TOÀN BỘ tool của mọi node, không chỉ tool đầu mỗi node. `_tools_of` đã bỏ
+    # trùng TRONG một node, nên phần còn lại đúng là trùng giữa các node với nhau — và đó là ca dễ
+    # xảy ra nhất khi một node mang được nhiều tool: tick `calculator` ở node này rồi tick lại ở kia.
+    named_tools = [tool for tools in tools_by_node.values() for tool in tools]
     dup_tools = _find_duplicates(named_tools)
     findings.append(
         _finding("dag.tool_call_no_duplicate_tools", not dup_tools, lambda: f"tool trùng lặp: {sorted(dup_tools)}")
