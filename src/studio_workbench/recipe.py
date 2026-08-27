@@ -75,14 +75,30 @@ def create_recipe(
     edges: list[Edge],
     temperature: float = 0.7,
     golden_set_ref: str = "callisto-golden-30-v1",
+    success_threshold: float = _DEFAULT_SUCCESS_THRESHOLD,
+    citation_accuracy_threshold: float = _DEFAULT_CITATION_ACCURACY_THRESHOLD,
 ) -> Recipe:
     """Khởi tạo một Recipe động hoàn toàn từ danh sách Nodes và Edges do UI kéo thả truyền vào.
 
     Hỗ trợ số lượng node ngẫu nhiên (2 node, 3 node, hay N node) kết nối tùy ý dưới dạng đồ thị DAG.
 
-    `model`, KB binding (`kb_id`/`scope`), và ngưỡng eval (`success`/`citation_accuracy`) là
-    quyết định nền tảng cố định — không nhận từ client. `temperature` là input thật của
-    người dùng, tự nhập/tự cấu hình.
+    `model` và KB binding (`kb_id`/`scope`) là quyết định nền tảng cố định — không nhận từ client.
+    `temperature` là input thật của người dùng.
+
+    ## Ngưỡng eval: từ cố định thành nhận-được (mặc định không đổi)
+
+    `kit#212/workbench#39` chốt hai ngưỡng này là hằng số nền tảng. Quyết định đó đứng được khi bộ
+    golden là bản viết tay 30 case; nó không còn đứng khi bộ được **sinh máy từ tài liệu người dùng
+    upload**, cỡ 10–20 case: ở mức đó một case trượt ăn 5–10% của một trục, nên `0.95` trên trục
+    citation nghĩa là **không được sai case nào**. Đo được: một agent trả lời đúng 10/11 và giữ hàng
+    rào 3/3 vẫn bị chặn publish, không có mặt phẳng nào để chỉnh.
+
+    Nới được mà không hạ chuẩn an toàn là vì hàng rào bảo mật ĐÃ tách thành cổng riêng
+    (`evalhub.compute_scorecard`: một case `fail_leak` ⇒ FAIL bất kể tỷ lệ). Trước bản vá đó, hạ
+    ngưỡng ở đây đồng nghĩa hạ luôn hàng rào — case bẫy gộp chung vào `success_rate`, nên hai trục
+    hoàn toàn khác nhau bị buộc vào một con số.
+
+    Mặc định giữ nguyên `_DEFAULT_*`, nên mọi call-site không truyền vẫn ra recipe y hệt trước.
     """
     t_id = tenant_id if isinstance(tenant_id, UUID) else UUID(tenant_id)
 
@@ -103,8 +119,8 @@ def create_recipe(
         kb_binding=kb_bind,
         golden_set_ref=golden_set_ref,
         scorecard_threshold=ScorecardThreshold(
-            success=_DEFAULT_SUCCESS_THRESHOLD,
-            citation_accuracy=_DEFAULT_CITATION_ACCURACY_THRESHOLD,
+            success=success_threshold,
+            citation_accuracy=citation_accuracy_threshold,
         ),
     )
 
